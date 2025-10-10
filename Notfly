@@ -26,11 +26,6 @@ else
     print("❌ setclipboard não disponível, Job ID: " .. jobId)
 end
 
--- Gerar link para entrar no servidor
-local function generateJoinLink()
-    return string.format("https://chillihub1.github.io/chillihub-joiner/?placeId=%s&gameInstanceId=%s", placeId, jobId)
-end
-
 -- Função para formatar números com separadores
 local function formatNumber(num)
     local formatted = tostring(num)
@@ -329,7 +324,6 @@ end
 
 -- Função para enviar notificação com EMBED via webhook direto
 local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, brainrotType, plot)
-    local joinLink = generateJoinLink()
     local webhookUrl = brainrotType == "HIGH" and WEBHOOK_ABOVE_10M or WEBHOOK_NORMAL
     local color = brainrotType == "HIGH" and 0x00FF00 or 0xFFA500 -- Verde para alto, Laranja para normal
     local title = brainrotType == "HIGH" and "🧠 BRAINROT MAIS CARO DETECTADO!" or "🧠 BRAINROT NORMAL DETECTADO!"
@@ -357,11 +351,6 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
                     {
                         name = "🆔 Job ID",
                         value = "```" .. jobId .. "```",
-                        inline = false
-                    },
-                    {
-                        name = "🔗 Link para Entrar",
-                        value = "[Clique aqui para entrar no servidor](" .. joinLink .. ")",
                         inline = false
                     },
                     {
@@ -485,7 +474,6 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
     if successCount > 0 then
         local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("🎯 "..successCount.." método(s) funcionaram no webhook "..typeMsg.."!")
-        print("🔗 Link gerado: " .. joinLink)
         print("👤 Dono do delivery: " .. ownerName .. " (apenas interno)")
         return true
     else
@@ -496,7 +484,6 @@ end
 
 -- Função alternativa simplificada caso a principal falhe
 local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, brainrotType, plot)
-    local joinLink = generateJoinLink()
     local webhookUrl = brainrotType == "HIGH" and WEBHOOK_ABOVE_10M or WEBHOOK_NORMAL
     local typeMsg = brainrotType == "HIGH" and "🧠 **BRAINROT MAIS CARO DETECTADO!**" or "🧠 **BRAINROT NORMAL DETECTADO!**"
     
@@ -508,7 +495,6 @@ local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, br
             "📛 **Nome:** " .. brainrotName .. "\n" ..
             "💰 **Valor:** " .. valuePerSecond .. "/s\n" ..
             "🆔 **Job ID:** `" .. jobId .. "`\n" ..
-            "🔗 **Link para Entrar:** " .. joinLink .. "\n" ..
             "👥 **Jogadores:** " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers) .. "\n" ..
             "⏰ **Hora:** " .. os.date("%d/%m/%Y %H:%M:%S"),
         username = "Brainrot Scanner"
@@ -531,7 +517,6 @@ local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, br
     if s then
         local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("✅ Notificação simples enviada via webhook "..typeMsg.."!")
-        print("🔗 Link gerado: " .. joinLink)
         print("👤 Dono do delivery: " .. ownerName .. " (apenas interno)")
         return true
     end
@@ -668,7 +653,6 @@ print("🆔 Job ID: " .. jobId)
 print("🎮 Place ID: " .. placeId)
 print("💰 Filtros: 10M+ (Alto) | 500K-10M (Normal) | <500K (Ignorado)")
 print("🚫 IGNORANDO brainrots do próprio jogador")
-print("🔗 Sistema de link ativado")
 
 -- Loop principal de verificação - MÁXIMA VELOCIDADE
 while true do

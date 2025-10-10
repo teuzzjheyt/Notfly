@@ -7,13 +7,14 @@ print("🧠 SISTEMA DE NOTIFICAÇÃO BRAINROT - MÁXIMA VELOCIDADE")
 
 -- WEBHOOKS PARA DIFERENTES VALORES
 local WEBHOOK_ABOVE_10M = "https://discord.com/api/webhooks/1422728583113080922/yUC2VEgplhueFqLp5FtJJeW6RvkhelZvwD0c-2S1JdeYPLXihKCXird4N2X0HZwD9B8M"
-local WEBHOOK_BELOW_10M = "https://discord.com/api/webhooks/1426025472176951346/wxSw8KuKOZ4geDzDBl6NYIiyB2Afk-a5_VzLS6yQcHPvEEENdQ0wBzSPS0DiwruvuZdv"
+local WEBHOOK_NORMAL = "https://discord.com/api/webhooks/1426025472176951346/wxSw8KuKOZ4geDzDBl6NYIiyB2Afk-a5_VzLS6yQcHPvEEENdQ0wBzSPS0DiwruvuZdv"
 
 -- Variáveis globais
 local lastNotifiedBrainrot = ""
 local notificationCooldown = 5 -- segundos (mínimo possível)
 local lastNotificationTime = 0
-local MINIMUM_VALUE = 10000000 -- 10 milhões por segundo (10M/s)
+local MINIMUM_VALUE_10M = 10000000 -- 10 milhões por segundo (10M/s)
+local MINIMUM_VALUE_NORMAL = 500000 -- 500 mil por segundo (500K/s)
 
 -- Copiar Job ID para clipboard
 local jobId = game.JobId
@@ -41,13 +42,24 @@ local function formatNumber(num)
     return formatted
 end
 
+-- Função para determinar o tipo de brainrot
+local function getBrainrotType(valueNum)
+    if valueNum >= MINIMUM_VALUE_10M then
+        return "HIGH" -- Acima de 10M
+    elseif valueNum >= MINIMUM_VALUE_NORMAL then
+        return "NORMAL" -- Entre 500K e 10M
+    else
+        return "LOW" -- Abaixo de 500K (não notifica)
+    end
+end
+
 -- Função para enviar notificação com EMBED via webhook direto
-local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, isAbove10M)
+local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, brainrotType)
     local joinLink = generateJoinLink()
-    local webhookUrl = isAbove10M and WEBHOOK_ABOVE_10M or WEBHOOK_BELOW_10M
-    local color = isAbove10M and 0x00FF00 or 0xFFA500 -- Verde para acima de 10M, Laranja para abaixo
-    local title = isAbove10M and "🧠 BRAINROT MAIS CARO DETECTADO!" or "🧠 BRAINROT NORMAL DETECTADO!"
-    local valueType = isAbove10M and "💰 VALOR ALTO" or "💰 Valor por Segundo"
+    local webhookUrl = brainrotType == "HIGH" and WEBHOOK_ABOVE_10M or WEBHOOK_NORMAL
+    local color = brainrotType == "HIGH" and 0x00FF00 or 0xFFA500 -- Verde para alto, Laranja para normal
+    local title = brainrotType == "HIGH" and "🧠 BRAINROT MAIS CARO DETECTADO!" or "🧠 BRAINROT NORMAL DETECTADO!"
+    local valueType = brainrotType == "HIGH" and "💰 VALOR ALTO" or "💰 Valor por Segundo"
     
     local embedData = {
         username = "Brainrot Scanner",
@@ -93,7 +105,7 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, isA
                     }
                 },
                 footer = {
-                    text = isAbove10M and "Steal a Brainrot • Scanner Automático • VALOR ALTO" or "Steal a Brainrot • Scanner Automático • Valor Normal"
+                    text = brainrotType == "HIGH" and "Steal a Brainrot • Scanner Automático • VALOR ALTO" or "Steal a Brainrot • Scanner Automático • Valor Normal"
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }
@@ -200,7 +212,7 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, isA
     end
     
     if successCount > 0 then
-        local typeMsg = isAbove10M and "VALOR ALTO" or "Valor Normal"
+        local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("🎯 "..successCount.." método(s) funcionaram no webhook "..typeMsg.."!")
         print("🔗 Link gerado: " .. joinLink)
         return true
@@ -211,11 +223,11 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, isA
 end
 
 -- Função alternativa simplificada caso a principal falhe
-local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, isAbove10M)
+local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, brainrotType)
     local joinLink = generateJoinLink()
-    local webhookUrl = isAbove10M and WEBHOOK_ABOVE_10M or WEBHOOK_BELOW_10M
-    local typeMsg = isAbove10M and "🧠 **BRAINROT MAIS CARO DETECTADO!**" or "🧠 **BRAINROT NORMAL DETECTADO!**"
-    local valueType = isAbove10M and "💰 **VALOR ALTO**" or "💰 **Valor**"
+    local webhookUrl = brainrotType == "HIGH" and WEBHOOK_ABOVE_10M or WEBHOOK_NORMAL
+    local typeMsg = brainrotType == "HIGH" and "🧠 **BRAINROT MAIS CARO DETECTADO!**" or "🧠 **BRAINROT NORMAL DETECTADO!**"
+    local valueType = brainrotType == "HIGH" and "💰 **VALOR ALTO**" or "💰 **Valor**"
     
     local simpleData = {
         content = typeMsg .. "\n" ..
@@ -244,7 +256,7 @@ local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, is
     end)
     
     if s then
-        local typeMsg = isAbove10M and "VALOR ALTO" or "Valor Normal"
+        local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("✅ Notificação simples enviada via webhook "..typeMsg.."!")
         print("🔗 Link gerado: " .. joinLink)
         return true
@@ -341,8 +353,14 @@ local function checkAndNotifyBestBrainrot()
         return
     end
     
-    -- Verificar se é acima ou abaixo de 10M
-    local isAbove10M = best.valueNum >= MINIMUM_VALUE
+    -- Verificar o tipo de brainrot
+    local brainrotType = getBrainrotType(best.valueNum)
+    
+    -- Ignorar brainrots abaixo de 500K
+    if brainrotType == "LOW" then
+        print("⏭️ Brainrot ignorado: " .. best.name .. " - " .. best.valueStr .. " (" .. formatNumber(best.valueNum) .. "/s - Abaixo de 500K)")
+        return
+    end
     
     -- Criar identificador único para este brainrot
     local brainrotIdentifier = best.name .. "_" .. best.valueStr
@@ -352,22 +370,22 @@ local function checkAndNotifyBestBrainrot()
         return
     end
     
-    local typeMsg = isAbove10M and "🎯 BRAINROT VALOR ALTO" or "🎯 BRAINROT NORMAL"
+    local typeMsg = brainrotType == "HIGH" and "🎯 BRAINROT VALOR ALTO" or "🎯 BRAINROT NORMAL"
     print(typeMsg .. ": " .. best.name .. " - " .. best.valueStr .. " (" .. formatNumber(best.valueNum) .. "/s)")
     
     -- Tentar enviar notificação com EMBED via webhook
-    local success = sendEmbedNotification(best.name, best.valueStr, best.valueNum, isAbove10M)
+    local success = sendEmbedNotification(best.name, best.valueStr, best.valueNum, brainrotType)
     
     -- Se falhar, tentar método simplificado
     if not success then
         print("🔄 Tentando método simplificado...")
-        success = sendSimpleNotification(best.name, best.valueStr, best.valueNum, isAbove10M)
+        success = sendSimpleNotification(best.name, best.valueStr, best.valueNum, brainrotType)
     end
     
     if success then
         lastNotifiedBrainrot = brainrotIdentifier
         lastNotificationTime = currentTime
-        local typeMsg = isAbove10M and "VALOR ALTO" or "NORMAL"
+        local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("✅ Notificação "..typeMsg.." registrada com sucesso!")
     else
         print("💥 Falha ao enviar notificação via webhook")
@@ -378,10 +396,11 @@ end
 print("🚀 INICIANDO MONITORAMENTO ULTRA RÁPIDO")
 print("📡 Webhooks configurados:")
 print("   🟢 Acima de 10M: Webhook VALOR ALTO")
-print("   🟠 Abaixo de 10M: Webhook Valor Normal")
+print("   🟠 500K a 10M: Webhook Valor Normal")
+print("   🔴 Abaixo de 500K: Não notifica")
 print("🆔 Job ID: " .. jobId)
 print("🎮 Place ID: " .. placeId)
-print("💰 Filtro: Notificações separadas por valor")
+print("💰 Filtros: 10M+ (Alto) | 500K-10M (Normal) | <500K (Ignorado)")
 print("🔗 Sistema de link ativado")
 
 -- Loop principal de verificação - MÁXIMA VELOCIDADE

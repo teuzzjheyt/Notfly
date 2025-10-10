@@ -42,6 +42,280 @@ local function formatNumber(num)
     return formatted
 end
 
+-- Função para identificar se um plot pertence ao jogador local
+local function isMyPlot(plot)
+    if not plot then
+        return false
+    end
+    
+    local localPlayer = Players.LocalPlayer
+    local localPlayerName = localPlayer.Name
+    local localPlayerUserId = localPlayer.UserId
+    
+    -- MÉTODO 1: Verificar PlotSign -> YourBase (método do delivery)
+    local plotSign = plot:FindFirstChild("PlotSign")
+    if plotSign then
+        local yourBase = plotSign:FindFirstChild("YourBase")
+        if yourBase and yourBase.Enabled then
+            print("✅ Plot identificado como MEU (YourBase enabled): " .. plot.Name)
+            return true
+        end
+    end
+    
+    -- MÉTODO 2: Verificar Owner Value
+    local ownerValue = plot:FindFirstChild("Owner")
+    if ownerValue then
+        -- Se for Player object
+        if typeof(ownerValue.Value) == "Instance" and ownerValue.Value:IsA("Player") then
+            if ownerValue.Value == localPlayer then
+                print("✅ Plot identificado como MEU (Owner Player): " .. plot.Name)
+                return true
+            end
+        -- Se for string (nome)
+        elseif typeof(ownerValue.Value) == "string" then
+            if ownerValue.Value == localPlayerName then
+                print("✅ Plot identificado como MEU (Owner Name): " .. plot.Name)
+                return true
+            end
+        end
+    end
+    
+    -- MÉTODO 3: Verificar pelo nome do plot
+    local plotName = plot.Name
+    if plotName:lower():find(localPlayerName:lower()) then
+        print("✅ Plot identificado como MEU (Nome contém): " .. plot.Name)
+        return true
+    end
+    
+    -- MÉTODO 4: Verificar OwnerId
+    local ownerId = plot:FindFirstChild("OwnerId") or plot:FindFirstChild("UserID") or plot:FindFirstChild("PlayerId")
+    if ownerId and ownerId:IsA("NumberValue") then
+        if ownerId.Value == localPlayerUserId then
+            print("✅ Plot identificado como MEU (OwnerId): " .. plot.Name)
+            return true
+        end
+    end
+    
+    -- MÉTODO 5: Verificar StringValues
+    local ownerString = plot:FindFirstChild("OwnerName") or plot:FindFirstChild("owner") or plot:FindFirstChild("PlayerName")
+    if ownerString and ownerString:IsA("StringValue") then
+        if ownerString.Value == localPlayerName then
+            print("✅ Plot identificado como MEU (OwnerName): " .. plot.Name)
+            return true
+        end
+    end
+    
+    -- MÉTODO 6: Busca recursiva
+    local function searchMyPlotInChildren(parent)
+        for _, child in ipairs(parent:GetChildren()) do
+            if child:IsA("StringValue") and (child.Name:lower():find("owner") or child.Name:lower():find("player")) then
+                if child.Value == localPlayerName then
+                    return true
+                end
+            end
+            
+            if child:IsA("NumberValue") and (child.Name:lower():find("owner") or child.Name:lower():find("user") or child.Name:lower():find("player")) then
+                if child.Value == localPlayerUserId then
+                    return true
+                end
+            end
+            
+            if child:IsA("Folder") or child:IsA("Model") then
+                if searchMyPlotInChildren(child) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    
+    if searchMyPlotInChildren(plot) then
+        print("✅ Plot identificado como MEU (Busca recursiva): " .. plot.Name)
+        return true
+    end
+    
+    return false
+end
+
+-- Função para obter informações do dono do delivery (MÉTODO AVANÇADO)
+local function getDeliveryOwnerInfo(plot)
+    if not plot then
+        return "🤷‍♂️ Dono Desconhecido", "❌ N/A"
+    end
+    
+    print("🔍 Procurando dono do delivery no plot: " .. plot.Name)
+    
+    -- MÉTODO 1: Procurar por PlotSign -> YourBase (método do código de delivery)
+    local plotSign = plot:FindFirstChild("PlotSign")
+    if plotSign then
+        local yourBase = plotSign:FindFirstChild("YourBase")
+        if yourBase then
+            print("✅ Encontrado PlotSign com YourBase: " .. tostring(yourBase.Enabled))
+            
+            -- Se YourBase está enabled, este é o plot do jogador local
+            if yourBase.Enabled then
+                local localPlayer = Players.LocalPlayer
+                local profileLink = "https://www.roblox.com/users/" .. localPlayer.UserId .. "/profile"
+                print("👤 Dono identificado (YourBase): " .. localPlayer.Name)
+                return localPlayer.Name, profileLink
+            end
+        end
+    end
+    
+    -- MÉTODO 2: Procurar por ObjectValue "Owner" no plot
+    local ownerValue = plot:FindFirstChild("Owner")
+    if ownerValue then
+        print("✅ Encontrado Owner Value: " .. tostring(ownerValue.Value))
+        
+        -- Se for um Player object
+        if typeof(ownerValue.Value) == "Instance" and ownerValue.Value:IsA("Player") then
+            local player = ownerValue.Value
+            local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+            print("👤 Dono encontrado (Player Object): " .. player.Name)
+            return player.Name, profileLink
+        
+        -- Se for string (nome do jogador)
+        elseif typeof(ownerValue.Value) == "string" then
+            local ownerName = ownerValue.Value
+            print("👤 Dono encontrado (String): " .. ownerName)
+            
+            -- Procurar jogador online com esse nome
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player.Name == ownerName then
+                    local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+                    print("✅ Jogador online encontrado: " .. player.Name)
+                    return player.Name, profileLink
+                end
+            end
+            
+            -- Se não encontrou online, retorna o nome
+            return ownerName, "https://www.roblox.com/search/users?keyword=" .. ownerName
+        end
+    end
+    
+    -- MÉTODO 3: Procurar por DeliveryHitbox e relacionar com jogadores
+    local deliveryHitbox = plot:FindFirstChild("DeliveryHitbox")
+    if deliveryHitbox then
+        print("✅ Encontrado DeliveryHitbox no plot")
+        
+        -- Tentar encontrar o jogador pelo nome do plot
+        local plotName = plot.Name
+        for _, player in ipairs(Players:GetPlayers()) do
+            if plotName:lower():find(player.Name:lower()) then
+                local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+                print("✅ Dono identificado pelo nome do plot: " .. player.Name)
+                return player.Name, profileLink
+            end
+        end
+    end
+    
+    -- MÉTODO 4: Procurar por StringValue "OwnerName" ou similar
+    local ownerString = plot:FindFirstChild("OwnerName") or plot:FindFirstChild("owner") or plot:FindFirstChild("PlayerName")
+    if ownerString and ownerString:IsA("StringValue") then
+        local ownerName = ownerString.Value
+        print("👤 Dono encontrado (StringValue): " .. ownerName)
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.Name == ownerName then
+                local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+                return player.Name, profileLink
+            end
+        end
+        return ownerName, "https://www.roblox.com/search/users?keyword=" .. ownerName
+    end
+    
+    -- MÉTODO 5: Procurar por NumberValue (UserID)
+    local ownerId = plot:FindFirstChild("OwnerId") or plot:FindFirstChild("UserID") or plot:FindFirstChild("PlayerId")
+    if ownerId and ownerId:IsA("NumberValue") then
+        local userId = ownerId.Value
+        print("👤 UserID encontrado: " .. tostring(userId))
+        
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.UserId == userId then
+                local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+                return player.Name, profileLink
+            end
+        end
+        
+        -- Se não encontrou online, cria link com o UserID
+        return "UserID: " .. userId, "https://www.roblox.com/users/" .. userId .. "/profile"
+    end
+    
+    -- MÉTODO 6: Busca recursiva em todos os filhos do plot
+    local function searchInChildren(parent)
+        for _, child in ipairs(parent:GetChildren()) do
+            -- Verificar StringValues relacionados a dono
+            if child:IsA("StringValue") and (child.Name:lower():find("owner") or child.Name:lower():find("player") or child.Name:lower():find("user")) then
+                local value = child.Value
+                if value and value ~= "" then
+                    print("🔍 Encontrado StringValue: " .. child.Name .. " = " .. value)
+                    
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        if player.Name == value then
+                            local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+                            return player.Name, profileLink
+                        end
+                    end
+                    
+                    if value:match("%d+") then
+                        local userId = tonumber(value)
+                        if userId then
+                            return "UserID: " .. userId, "https://www.roblox.com/users/" .. userId .. "/profile"
+                        end
+                    end
+                    
+                    return value, "https://www.roblox.com/search/users?keyword=" .. value
+                end
+            end
+            
+            -- Verificar NumberValues
+            if child:IsA("NumberValue") and (child.Name:lower():find("owner") or child.Name:lower():find("user") or child.Name:lower():find("player")) then
+                local userId = child.Value
+                print("🔍 Encontrado NumberValue: " .. child.Name .. " = " .. tostring(userId))
+                
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if player.UserId == userId then
+                        local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+                        return player.Name, profileLink
+                    end
+                end
+                
+                return "UserID: " .. userId, "https://www.roblox.com/users/" .. userId .. "/profile"
+            end
+            
+            -- Buscar recursivamente
+            if child:IsA("Folder") or child:IsA("Model") then
+                local result, profile = searchInChildren(child)
+                if result ~= "🤷‍♂️ Dono Desconhecido" then
+                    return result, profile
+                end
+            end
+        end
+        return "🤷‍♂️ Dono Desconhecido", "❌ N/A"
+    end
+    
+    local result, profile = searchInChildren(plot)
+    if result ~= "🤷‍♂️ Dono Desconhecido" then
+        return result, profile
+    end
+    
+    -- MÉTODO 7: Tentar encontrar pelo plot number
+    local plotNumber = plot.Name:match("Plot (%d+)") or plot.Name:match("(%d+)")
+    if plotNumber then
+        print("🔍 Plot numerado encontrado: " .. plotNumber)
+        local players = Players:GetPlayers()
+        local plotNum = tonumber(plotNumber)
+        if plotNum and plotNum <= #players then
+            local player = players[plotNum]
+            local profileLink = "https://www.roblox.com/users/" .. player.UserId .. "/profile"
+            return player.Name .. " (Plot " .. plotNumber .. ")", profileLink
+        end
+    end
+    
+    print("❌ Não foi possível identificar o dono do delivery")
+    return "🤷‍♂️ Dono Desconhecido", "❌ N/A"
+end
+
 -- Função para determinar o tipo de brainrot
 local function getBrainrotType(valueNum)
     if valueNum >= MINIMUM_VALUE_10M then
@@ -54,12 +328,14 @@ local function getBrainrotType(valueNum)
 end
 
 -- Função para enviar notificação com EMBED via webhook direto
-local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, brainrotType)
+local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, brainrotType, plot)
     local joinLink = generateJoinLink()
     local webhookUrl = brainrotType == "HIGH" and WEBHOOK_ABOVE_10M or WEBHOOK_NORMAL
     local color = brainrotType == "HIGH" and 0x00FF00 or 0xFFA500 -- Verde para alto, Laranja para normal
     local title = brainrotType == "HIGH" and "🧠 BRAINROT MAIS CARO DETECTADO!" or "🧠 BRAINROT NORMAL DETECTADO!"
-    local valueType = brainrotType == "HIGH" and "💰 VALOR ALTO" or "💰 Valor por Segundo"
+    
+    -- Obter informações do dono do delivery (mantido para logs internos)
+    local ownerName, ownerProfile = getDeliveryOwnerInfo(plot)
     
     local embedData = {
         username = "Brainrot Scanner",
@@ -74,13 +350,8 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
                         inline = true
                     },
                     {
-                        name = valueType,
+                        name = "💰 Valor por Segundo",
                         value = valuePerSecond,
-                        inline = true
-                    },
-                    {
-                        name = "🔢 Valor Numérico",
-                        value = formatNumber(valueNum) .. "/s",
                         inline = true
                     },
                     {
@@ -215,6 +486,7 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
         local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("🎯 "..successCount.." método(s) funcionaram no webhook "..typeMsg.."!")
         print("🔗 Link gerado: " .. joinLink)
+        print("👤 Dono do delivery: " .. ownerName .. " (apenas interno)")
         return true
     else
         print("💥 Todos os métodos falharam com o webhook")
@@ -223,17 +495,18 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
 end
 
 -- Função alternativa simplificada caso a principal falhe
-local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, brainrotType)
+local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, brainrotType, plot)
     local joinLink = generateJoinLink()
     local webhookUrl = brainrotType == "HIGH" and WEBHOOK_ABOVE_10M or WEBHOOK_NORMAL
     local typeMsg = brainrotType == "HIGH" and "🧠 **BRAINROT MAIS CARO DETECTADO!**" or "🧠 **BRAINROT NORMAL DETECTADO!**"
-    local valueType = brainrotType == "HIGH" and "💰 **VALOR ALTO**" or "💰 **Valor**"
+    
+    -- Obter informações do dono do delivery (mantido para logs internos)
+    local ownerName, ownerProfile = getDeliveryOwnerInfo(plot)
     
     local simpleData = {
         content = typeMsg .. "\n" ..
             "📛 **Nome:** " .. brainrotName .. "\n" ..
-            valueType .. ": " .. valuePerSecond .. "/s\n" ..
-            "🔢 **Valor Numérico:** " .. formatNumber(valueNum) .. "/s\n" ..
+            "💰 **Valor:** " .. valuePerSecond .. "/s\n" ..
             "🆔 **Job ID:** `" .. jobId .. "`\n" ..
             "🔗 **Link para Entrar:** " .. joinLink .. "\n" ..
             "👥 **Jogadores:** " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers) .. "\n" ..
@@ -259,6 +532,7 @@ local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, br
         local typeMsg = brainrotType == "HIGH" and "VALOR ALTO" or "NORMAL"
         print("✅ Notificação simples enviada via webhook "..typeMsg.."!")
         print("🔗 Link gerado: " .. joinLink)
+        print("👤 Dono do delivery: " .. ownerName .. " (apenas interno)")
         return true
     end
     
@@ -280,24 +554,16 @@ local function parseValue(str)
     return num
 end
 
-local function getMyPlot()
-    local localPlayer = Players.LocalPlayer
+-- Função para encontrar o melhor brainrot IGNORANDO o plot do jogador
+local function findBestBrainrot_IgnoreMyPlot()
+    local best = { podium = nil, animalModel = nil, name = "", valueStr = "", valueNum = 0, plot = nil }
+    
     for _, plot in ipairs(workspace.Plots:GetChildren()) do
-        if plot:FindFirstChild("Owner") then
-            if plot.Owner.Value == localPlayer or plot.Owner.Value == localPlayer.Name then
-                return plot
-            end
-        elseif plot.Name:lower():find(localPlayer.Name:lower()) then
-            return plot
-        end
-    end
-    return nil
-end
-
-local function findBestBrainrot_Metodo2(excludePlot)
-    local best = { podium = nil, animalModel = nil, name = "", valueStr = "", valueNum = 0 }
-    for _, plot in ipairs(workspace.Plots:GetChildren()) do
-        if plot ~= excludePlot then
+        -- VERIFICAR SE É O PLOT DO JOGADOR E IGNORAR
+        if isMyPlot(plot) then
+            print("🚫 Ignorando plot do jogador: " .. plot.Name)
+        else
+            -- Procurar brainrots apenas em plots que NÃO são do jogador
             local animalPodiums = plot:FindFirstChild("AnimalPodiums")
             if animalPodiums then
                 for _, podium in ipairs(animalPodiums:GetChildren()) do
@@ -320,6 +586,7 @@ local function findBestBrainrot_Metodo2(excludePlot)
                                 best.valueStr = generation.Text
                                 best.name = displayName.Text
                                 best.podium = podium
+                                best.plot = plot -- Salva a referência do plot
                                 for _, obj in ipairs(podium:GetChildren()) do
                                     if (obj:IsA("Model") or obj:IsA("MeshPart") or obj:IsA("Part")) and obj.Name ~= "Base" then
                                         best.animalModel = obj
@@ -345,9 +612,8 @@ local function checkAndNotifyBestBrainrot()
         return
     end
     
-    -- Verificação RÁPIDA apenas com método mais eficiente
-    local myPlot = getMyPlot()
-    local best = findBestBrainrot_Metodo2(myPlot)
+    -- Verificação RÁPIDA apenas com método mais eficiente IGNORANDO plot do jogador
+    local best = findBestBrainrot_IgnoreMyPlot()
     
     if best.name == "" or not best.animalModel then
         return
@@ -374,12 +640,12 @@ local function checkAndNotifyBestBrainrot()
     print(typeMsg .. ": " .. best.name .. " - " .. best.valueStr .. " (" .. formatNumber(best.valueNum) .. "/s)")
     
     -- Tentar enviar notificação com EMBED via webhook
-    local success = sendEmbedNotification(best.name, best.valueStr, best.valueNum, brainrotType)
+    local success = sendEmbedNotification(best.name, best.valueStr, best.valueNum, brainrotType, best.plot)
     
     -- Se falhar, tentar método simplificado
     if not success then
         print("🔄 Tentando método simplificado...")
-        success = sendSimpleNotification(best.name, best.valueStr, best.valueNum, brainrotType)
+        success = sendSimpleNotification(best.name, best.valueStr, best.valueNum, brainrotType, best.plot)
     end
     
     if success then
@@ -401,6 +667,7 @@ print("   🔴 Abaixo de 500K: Não notifica")
 print("🆔 Job ID: " .. jobId)
 print("🎮 Place ID: " .. placeId)
 print("💰 Filtros: 10M+ (Alto) | 500K-10M (Normal) | <500K (Ignorado)")
+print("🚫 IGNORANDO brainrots do próprio jogador")
 print("🔗 Sistema de link ativado")
 
 -- Loop principal de verificação - MÁXIMA VELOCIDADE

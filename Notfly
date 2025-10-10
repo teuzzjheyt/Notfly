@@ -1,0 +1,398 @@
+-- Sistema de Notificação do Brainrot Mais Caro com EMBED - MÁXIMA VELOCIDADE
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local workspace = game:GetService("Workspace")
+
+print("🧠 SISTEMA DE NOTIFICAÇÃO BRAINROT - MÁXIMA VELOCIDADE")
+
+-- WEBHOOKS PARA DIFERENTES VALORES
+local WEBHOOK_ABOVE_10M = "https://discord.com/api/webhooks/1422728583113080922/yUC2VEgplhueFqLp5FtJJeW6RvkhelZvwD0c-2S1JdeYPLXihKCXird4N2X0HZwD9B8M"
+local WEBHOOK_BELOW_10M = "https://discord.com/api/webhooks/1426025472176951346/wxSw8KuKOZ4geDzDBl6NYIiyB2Afk-a5_VzLS6yQcHPvEEENdQ0wBzSPS0DiwruvuZdv"
+
+-- Variáveis globais
+local lastNotifiedBrainrot = ""
+local notificationCooldown = 5 -- segundos (mínimo possível)
+local lastNotificationTime = 0
+local MINIMUM_VALUE = 10000000 -- 10 milhões por segundo (10M/s)
+
+-- Copiar Job ID para clipboard
+local jobId = game.JobId
+local placeId = game.PlaceId
+if setclipboard then
+    setclipboard(jobId)
+    print("📋 Job ID copiado para clipboard: " .. jobId)
+else
+    print("❌ setclipboard não disponível, Job ID: " .. jobId)
+end
+
+-- Gerar link para entrar no servidor
+local function generateJoinLink()
+    return string.format("https://chillihub1.github.io/chillihub-joiner/?placeId=%s&gameInstanceId=%s", placeId, jobId)
+end
+
+-- Função para formatar números com separadores
+local function formatNumber(num)
+    local formatted = tostring(num)
+    local k = formatted:len()
+    while k > 3 do
+        formatted = formatted:sub(1, k-3) .. "," .. formatted:sub(k-2)
+        k = k - 3
+    end
+    return formatted
+end
+
+-- Função para enviar notificação com EMBED via webhook direto
+local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, isAbove10M)
+    local joinLink = generateJoinLink()
+    local webhookUrl = isAbove10M and WEBHOOK_ABOVE_10M or WEBHOOK_BELOW_10M
+    local color = isAbove10M and 0x00FF00 or 0xFFA500 -- Verde para acima de 10M, Laranja para abaixo
+    local title = isAbove10M and "🧠 BRAINROT MAIS CARO DETECTADO!" or "🧠 BRAINROT NORMAL DETECTADO!"
+    local valueType = isAbove10M and "💰 VALOR ALTO" or "💰 Valor por Segundo"
+    
+    local embedData = {
+        username = "Brainrot Scanner",
+        embeds = {
+            {
+                title = title,
+                color = color,
+                fields = {
+                    {
+                        name = "📛 Nome do Brainrot",
+                        value = brainrotName,
+                        inline = true
+                    },
+                    {
+                        name = valueType,
+                        value = valuePerSecond,
+                        inline = true
+                    },
+                    {
+                        name = "🔢 Valor Numérico",
+                        value = formatNumber(valueNum) .. "/s",
+                        inline = true
+                    },
+                    {
+                        name = "🆔 Job ID",
+                        value = "```" .. jobId .. "```",
+                        inline = false
+                    },
+                    {
+                        name = "🔗 Link para Entrar",
+                        value = "[Clique aqui para entrar no servidor](" .. joinLink .. ")",
+                        inline = false
+                    },
+                    {
+                        name = "👥 Jogadores Online",
+                        value = tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers),
+                        inline = true
+                    },
+                    {
+                        name = "⏰ Detectado em",
+                        value = os.date("%d/%m/%Y %H:%M:%S"),
+                        inline = true
+                    }
+                },
+                footer = {
+                    text = isAbove10M and "Steal a Brainrot • Scanner Automático • VALOR ALTO" or "Steal a Brainrot • Scanner Automático • Valor Normal"
+                },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            }
+        }
+    }
+    
+    -- Tentar todos os métodos rapidamente com webhook direto
+    local successCount = 0
+    
+    -- Método 1: request (mais comum)
+    local s1, r1 = pcall(function()
+        local json = HttpService:JSONEncode(embedData)
+        local response = request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = json
+        })
+        return response
+    end)
+    
+    if s1 and r1 then
+        print("✅ Notificação enviada via webhook! (Método 1)")
+        successCount = successCount + 1
+    else
+        print("❌ Falha Método 1:", r1)
+    end
+    
+    -- Método 2: syn.request
+    local s2, r2 = pcall(function()
+        local json = HttpService:JSONEncode(embedData)
+        local response = syn.request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = json
+        })
+        return response
+    end)
+    
+    if s2 and r2 then
+        print("✅ Notificação enviada via webhook! (Método 2)")
+        successCount = successCount + 1
+    else
+        print("❌ Falha Método 2:", r2)
+    end
+    
+    -- Método 3: fluxus.request
+    local s3, r3 = pcall(function()
+        local json = HttpService:JSONEncode(embedData)
+        local response = fluxus.request({
+            Url = webhookUrl,
+            Method = "POST", 
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = json
+        })
+        return response
+    end)
+    
+    if s3 and r3 then
+        print("✅ Notificação enviada via webhook! (Método 3)")
+        successCount = successCount + 1
+    else
+        print("❌ Falha Método 3:", r3)
+    end
+    
+    -- Método 4: http_post (alternativa)
+    local s4, r4 = pcall(function()
+        local json = HttpService:JSONEncode(embedData)
+        return http_post(webhookUrl, json, {["Content-Type"] = "application/json"})
+    end)
+    
+    if s4 and r4 then
+        print("✅ Notificação enviada via webhook! (Método 4)")
+        successCount = successCount + 1
+    else
+        print("❌ Falha Método 4:", r4)
+    end
+    
+    -- Método 5: http_request (alternativa comum)
+    local s5, r5 = pcall(function()
+        local json = HttpService:JSONEncode(embedData)
+        return http_request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = json
+        })
+    end)
+    
+    if s5 and r5 then
+        print("✅ Notificação enviada via webhook! (Método 5)")
+        successCount = successCount + 1
+    else
+        print("❌ Falha Método 5:", r5)
+    end
+    
+    if successCount > 0 then
+        local typeMsg = isAbove10M and "VALOR ALTO" or "Valor Normal"
+        print("🎯 "..successCount.." método(s) funcionaram no webhook "..typeMsg.."!")
+        print("🔗 Link gerado: " .. joinLink)
+        return true
+    else
+        print("💥 Todos os métodos falharam com o webhook")
+        return false
+    end
+end
+
+-- Função alternativa simplificada caso a principal falhe
+local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, isAbove10M)
+    local joinLink = generateJoinLink()
+    local webhookUrl = isAbove10M and WEBHOOK_ABOVE_10M or WEBHOOK_BELOW_10M
+    local typeMsg = isAbove10M and "🧠 **BRAINROT MAIS CARO DETECTADO!**" or "🧠 **BRAINROT NORMAL DETECTADO!**"
+    local valueType = isAbove10M and "💰 **VALOR ALTO**" or "💰 **Valor**"
+    
+    local simpleData = {
+        content = typeMsg .. "\n" ..
+            "📛 **Nome:** " .. brainrotName .. "\n" ..
+            valueType .. ": " .. valuePerSecond .. "/s\n" ..
+            "🔢 **Valor Numérico:** " .. formatNumber(valueNum) .. "/s\n" ..
+            "🆔 **Job ID:** `" .. jobId .. "`\n" ..
+            "🔗 **Link para Entrar:** " .. joinLink .. "\n" ..
+            "👥 **Jogadores:** " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers) .. "\n" ..
+            "⏰ **Hora:** " .. os.date("%d/%m/%Y %H:%M:%S"),
+        username = "Brainrot Scanner"
+    }
+    
+    local json = HttpService:JSONEncode(simpleData)
+    
+    -- Tentar método mais simples
+    local s, r = pcall(function()
+        return syn.request({
+            Url = webhookUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = json
+        })
+    end)
+    
+    if s then
+        local typeMsg = isAbove10M and "VALOR ALTO" or "Valor Normal"
+        print("✅ Notificação simples enviada via webhook "..typeMsg.."!")
+        print("🔗 Link gerado: " .. joinLink)
+        return true
+    end
+    
+    return false
+end
+
+-- FUNÇÕES DE DETECÇÃO OTIMIZADAS
+local function parseValue(str)
+    if not str then return 0 end
+    local cleanStr = string.gsub(str, "/s", "")
+    local num, suffix = string.match(cleanStr, "[$]?[%s]*([%d%.]+)[%s]*([MKBT]?)")
+    if not num then return 0 end
+    num = tonumber(num)
+    if not num then return 0 end
+    if suffix == "K" then num = num * 1e3
+    elseif suffix == "M" then num = num * 1e6
+    elseif suffix == "B" then num = num * 1e9
+    elseif suffix == "T" then num = num * 1e12 end
+    return num
+end
+
+local function getMyPlot()
+    local localPlayer = Players.LocalPlayer
+    for _, plot in ipairs(workspace.Plots:GetChildren()) do
+        if plot:FindFirstChild("Owner") then
+            if plot.Owner.Value == localPlayer or plot.Owner.Value == localPlayer.Name then
+                return plot
+            end
+        elseif plot.Name:lower():find(localPlayer.Name:lower()) then
+            return plot
+        end
+    end
+    return nil
+end
+
+local function findBestBrainrot_Metodo2(excludePlot)
+    local best = { podium = nil, animalModel = nil, name = "", valueStr = "", valueNum = 0 }
+    for _, plot in ipairs(workspace.Plots:GetChildren()) do
+        if plot ~= excludePlot then
+            local animalPodiums = plot:FindFirstChild("AnimalPodiums")
+            if animalPodiums then
+                for _, podium in ipairs(animalPodiums:GetChildren()) do
+                    local attach = podium:FindFirstChild("Base") and podium.Base:FindFirstChild("Spawn") and podium.Base.Spawn:FindFirstChild("Attachment")
+                    if attach and attach:FindFirstChild("AnimalOverhead") then
+                        local overhead = attach.AnimalOverhead
+                        local displayName = overhead:FindFirstChild("DisplayName")
+                        local generation = overhead:FindFirstChild("Generation")
+                        local hasAnimal = false
+                        for _, obj in ipairs(podium:GetChildren()) do
+                            if (obj:IsA("Model") or obj:IsA("MeshPart") or obj:IsA("Part")) and obj.Name ~= "Base" then
+                                hasAnimal = true
+                                break
+                            end
+                        end
+                        if displayName and generation and displayName:IsA("TextLabel") and generation:IsA("TextLabel") and hasAnimal then
+                            local valueNum = parseValue(generation.Text)
+                            if valueNum > best.valueNum then
+                                best.valueNum = valueNum
+                                best.valueStr = generation.Text
+                                best.name = displayName.Text
+                                best.podium = podium
+                                for _, obj in ipairs(podium:GetChildren()) do
+                                    if (obj:IsA("Model") or obj:IsA("MeshPart") or obj:IsA("Part")) and obj.Name ~= "Base" then
+                                        best.animalModel = obj
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- FUNÇÃO PRINCIPAL DE NOTIFICAÇÃO DO BRAINROT - MÁXIMA VELOCIDADE
+local function checkAndNotifyBestBrainrot()
+    local currentTime = tick()
+    
+    -- Verificar cooldown (mínimo)
+    if currentTime - lastNotificationTime < notificationCooldown then
+        return
+    end
+    
+    -- Verificação RÁPIDA apenas com método mais eficiente
+    local myPlot = getMyPlot()
+    local best = findBestBrainrot_Metodo2(myPlot)
+    
+    if best.name == "" or not best.animalModel then
+        return
+    end
+    
+    -- Verificar se é acima ou abaixo de 10M
+    local isAbove10M = best.valueNum >= MINIMUM_VALUE
+    
+    -- Criar identificador único para este brainrot
+    local brainrotIdentifier = best.name .. "_" .. best.valueStr
+    
+    -- Verificar se já notificamos este brainrot
+    if brainrotIdentifier == lastNotifiedBrainrot then
+        return
+    end
+    
+    local typeMsg = isAbove10M and "🎯 BRAINROT VALOR ALTO" or "🎯 BRAINROT NORMAL"
+    print(typeMsg .. ": " .. best.name .. " - " .. best.valueStr .. " (" .. formatNumber(best.valueNum) .. "/s)")
+    
+    -- Tentar enviar notificação com EMBED via webhook
+    local success = sendEmbedNotification(best.name, best.valueStr, best.valueNum, isAbove10M)
+    
+    -- Se falhar, tentar método simplificado
+    if not success then
+        print("🔄 Tentando método simplificado...")
+        success = sendSimpleNotification(best.name, best.valueStr, best.valueNum, isAbove10M)
+    end
+    
+    if success then
+        lastNotifiedBrainrot = brainrotIdentifier
+        lastNotificationTime = currentTime
+        local typeMsg = isAbove10M and "VALOR ALTO" or "NORMAL"
+        print("✅ Notificação "..typeMsg.." registrada com sucesso!")
+    else
+        print("💥 Falha ao enviar notificação via webhook")
+    end
+end
+
+-- SISTEMA DE MONITORAMENTO ULTRA RÁPIDO
+print("🚀 INICIANDO MONITORAMENTO ULTRA RÁPIDO")
+print("📡 Webhooks configurados:")
+print("   🟢 Acima de 10M: Webhook VALOR ALTO")
+print("   🟠 Abaixo de 10M: Webhook Valor Normal")
+print("🆔 Job ID: " .. jobId)
+print("🎮 Place ID: " .. placeId)
+print("💰 Filtro: Notificações separadas por valor")
+print("🔗 Sistema de link ativado")
+
+-- Loop principal de verificação - MÁXIMA VELOCIDADE
+while true do
+    local success, err = pcall(function()
+        checkAndNotifyBestBrainrot()
+    end)
+    
+    if not success then
+        print("⚠️ Erro no monitoramento: " .. tostring(err))
+    end
+    
+    wait(0.5) -- 0.5 segundos entre verificações
+end

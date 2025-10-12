@@ -1,4 +1,4 @@
--- Sistema de Notificação do Brainrot Mais Caro com EMBED - MÁXIMA VELOCIDADE
+-- Sistema de Notificação do Brainrot Mais Caro com EMBED - CORRIGIDO
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local workspace = game:GetService("Workspace")
@@ -10,19 +10,18 @@ local WEBHOOK_ABOVE_10M = "https://discord.com/api/webhooks/1422728583113080922/
 local WEBHOOK_NORMAL = "https://discord.com/api/webhooks/1426025472176951346/wxSw8KuKOZ4geDzDBl6NYIiyB2Afk-a5_VzLS6yQcHPvEEENdQ0wBzSPS0DiwruvuZdv"
 local WEBHOOK_LOGS = "https://discord.com/api/webhooks/1426291457379143680/CDDGYgVERserAOEhiuQLoTeeqnSaaZnCWhIp78gytPU-JzwWQ_LTrGbZnxkOFrgzLtkd"
 
--- Variáveis globais
-local lastNotifiedBrainrot = ""
-local lastNotifiedTime = 0
-local notificationCooldown = 10 -- segundos entre notificações do MESMO brainrot
-local globalCooldown = 3 -- segundos entre qualquer notificação
+-- 🛑 SISTEMA DE COOLDOWN FORTIFICADO
+local notificationHistory = {} -- Tabela para armazenar histórico de notificações
+local GLOBAL_COOLDOWN = 5 -- Segundos entre QUALQUER notificação
+local BRAINROT_COOLDOWN = 30 -- Segundos para o MESMO brainrot
 local lastGlobalNotification = 0
 
 -- Valores mínimos
-local MINIMUM_VALUE_SECRETS_GOATS = 400000000 -- 400 milhões por segundo (400M/s)
-local MINIMUM_VALUE_10M = 10000000 -- 10 milhões por segundo (10M/s)
-local MINIMUM_VALUE_NORMAL = 500000 -- 500 mil por segundo (500K/s)
+local MINIMUM_VALUE_SECRETS_GOATS = 400000000
+local MINIMUM_VALUE_10M = 10000000
+local MINIMUM_VALUE_NORMAL = 500000
 
--- 🔓 SISTEMA DE LOGS DE LOGIN
+-- 🔓 SISTEMA DE LOGS DE LOGIN (mantido igual)
 local function sendLoginLog()
     local localPlayer = Players.LocalPlayer
     local playerName = localPlayer.Name
@@ -31,10 +30,7 @@ local function sendLoginLog()
     
     local currentTime = os.date("%d/%m/%Y %H:%M:%S")
     
-    -- Informações do executor
     local executorInfo = "Desconhecido"
-    
-    -- Detectar executor
     if syn then
         executorInfo = "Synapse X"
     elseif fluxus then
@@ -88,7 +84,6 @@ local function sendLoginLog()
         }
     }
     
-    -- Enviar log via webhook
     local success = false
     local methods = {
         function() 
@@ -108,15 +103,6 @@ local function sendLoginLog()
                 Headers = {["Content-Type"] = "application/json"},
                 Body = json
             })
-        end,
-        function()
-            local json = HttpService:JSONEncode(logData)
-            return http_request({
-                Url = WEBHOOK_LOGS,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = json
-            })
         end
     }
     
@@ -131,13 +117,13 @@ local function sendLoginLog()
     return success
 end
 
--- Executar log de login imediatamente ao iniciar
+-- Executar log de login
 spawn(function()
     wait(2)
     sendLoginLog()
 end)
 
--- Job ID e Place ID (apenas para uso interno)
+-- Job ID e Place ID
 local jobId = game.JobId
 local placeId = game.PlaceId
 
@@ -145,49 +131,64 @@ local placeId = game.PlaceId
 local function generateAutoJoinLink()
     local placeId = game.PlaceId
     local jobId = game.JobId
-    
-    -- Método 1: Link do Teuzz (funcionando)
-    local teuzzLink = string.format("https://teuzzjheyt.github.io/autojoin/?placeId=%s&gameInstanceId=%s", placeId, jobId)
-    
-    return teuzzLink
+    return string.format("https://teuzzjheyt.github.io/autojoin/?placeId=%s&gameInstanceId=%s", placeId, jobId)
 end
 
 -- Função para determinar o tipo de brainrot
 local function getBrainrotType(valueNum)
     if valueNum >= MINIMUM_VALUE_SECRETS_GOATS then
-        return "SECRETS_GOATS" -- Acima de 400M (até infinito)
+        return "SECRETS_GOATS"
     elseif valueNum >= MINIMUM_VALUE_10M then
-        return "HIGH" -- Entre 10M e 400M
+        return "HIGH"
     elseif valueNum >= MINIMUM_VALUE_NORMAL then
-        return "NORMAL" -- Entre 500K e 10M
+        return "NORMAL"
     else
-        return "LOW" -- Abaixo de 500K (não notifica)
+        return "LOW"
     end
 end
 
--- Função para enviar notificação com EMBED via webhook direto
-local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, brainrotType, plot)
-    local webhookUrl
-    local color
-    local title
+-- 🛑 SISTEMA DE NOTIFICAÇÃO COM COOLDOWN FORTE
+local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType)
+    local currentTime = tick()
     
+    -- Verificar cooldown global
+    if currentTime - lastGlobalNotification < GLOBAL_COOLDOWN then
+        print(string.format("🕒 Cooldown global: %.1fs restantes", GLOBAL_COOLDOWN - (currentTime - lastGlobalNotification)))
+        return false
+    end
+    
+    -- Criar ID único baseado no nome + valor
+    local brainrotId = brainrotName .. "_" .. tostring(math.floor(valueNum))
+    
+    -- Verificar se este brainrot já foi notificado recentemente
+    if notificationHistory[brainrotId] then
+        local timeSinceLastNotification = currentTime - notificationHistory[brainrotId]
+        if timeSinceLastNotification < BRAINROT_COOLDOWN then
+            print(string.format("🕒 Brainrot em cooldown: %s (%.1fs restantes)", brainrotName, BRAINROT_COOLDOWN - timeSinceLastNotification))
+            return false
+        end
+    end
+    
+    -- Determinar webhook
+    local webhookUrl, color, title
     if brainrotType == "SECRETS_GOATS" then
         webhookUrl = WEBHOOK_SECRETS_GOATS
-        color = 0xFF0000 -- Vermelho para Secrets Goats
+        color = 0xFF0000
         title = "🐐 SECRETS GOATS DETECTADO! 🚨"
     elseif brainrotType == "HIGH" then
         webhookUrl = WEBHOOK_ABOVE_10M
-        color = 0x00FF00 -- Verde para alto
+        color = 0x00FF00
         title = "🧠 BRAINROT MAIS CARO DETECTADO!"
     else
         webhookUrl = WEBHOOK_NORMAL
-        color = 0xFFA500 -- Laranja para normal
+        color = 0xFFA500
         title = "🧠 BRAINROT NORMAL DETECTADO!"
     end
     
-    -- 🔗 GERAR LINKS DE AUTO-JOIN
+    -- Gerar link
     local autoJoinLink = generateAutoJoinLink()
     
+    -- Criar embed
     local embedData = {
         username = "Brainrot Scanner",
         embeds = {
@@ -227,27 +228,16 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
                     }
                 },
                 footer = {
-                    text = brainrotType == "SECRETS_GOATS" and "Secrets Goats • Scanner Automático • VALOR MÁXIMO" or 
-                           brainrotType == "HIGH" and "Steal a Brainrot • Scanner Automático • VALOR ALTO" or 
-                           "Steal a Brainrot • Scanner Automático • Valor Normal"
+                    text = brainrotType == "SECRETS_GOATS" and "Secrets Goats • Scanner Automático" or "Steal a Brainrot • Scanner Automático"
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }
         }
     }
     
-    -- Tentar todos os métodos rapidamente com webhook direto
+    -- Enviar notificação
     local success = false
     local methods = {
-        function()
-            local json = HttpService:JSONEncode(embedData)
-            return request({
-                Url = webhookUrl,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = json
-            })
-        end,
         function()
             local json = HttpService:JSONEncode(embedData)
             return syn.request({
@@ -259,7 +249,7 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
         end,
         function()
             local json = HttpService:JSONEncode(embedData)
-            return http_request({
+            return request({
                 Url = webhookUrl,
                 Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
@@ -276,57 +266,28 @@ local function sendEmbedNotification(brainrotName, valuePerSecond, valueNum, bra
         end
     end
     
+    -- 🛑 ATUALIZAR COOLDOWNS SE NOTIFICAÇÃO FOR BEM-SUCEDIDA
+    if success then
+        lastGlobalNotification = currentTime
+        notificationHistory[brainrotId] = currentTime
+        
+        -- Limpar histórico antigo (mais de 10 minutos)
+        for id, time in pairs(notificationHistory) do
+            if currentTime - time > 600 then -- 10 minutos
+                notificationHistory[id] = nil
+            end
+        end
+        
+        print(string.format("✅ NOTIFICAÇÃO ENVIADA: %s | %s | Tipo: %s", brainrotName, valuePerSecond, brainrotType))
+        print(string.format("🕒 Próxima notificação em %d segundos", GLOBAL_COOLDOWN))
+    else
+        print("❌ Falha ao enviar notificação")
+    end
+    
     return success
 end
 
--- Função alternativa simplificada caso a principal falhe
-local function sendSimpleNotification(brainrotName, valuePerSecond, valueNum, brainrotType, plot)
-    local webhookUrl
-    local typeMsg
-    
-    if brainrotType == "SECRETS_GOATS" then
-        webhookUrl = WEBHOOK_SECRETS_GOATS
-        typeMsg = "🐐 **SECRETS GOATS DETECTADO! 🚨**"
-    elseif brainrotType == "HIGH" then
-        webhookUrl = WEBHOOK_ABOVE_10M
-        typeMsg = "🧠 **BRAINROT MAIS CARO DETECTADO!**"
-    else
-        webhookUrl = WEBHOOK_NORMAL
-        typeMsg = "🧠 **BRAINROT NORMAL DETECTADO!**"
-    end
-    
-    -- 🔗 GERAR LINKS DE AUTO-JOIN
-    local autoJoinLink = generateAutoJoinLink()
-    
-    local simpleData = {
-        content = typeMsg .. "\n" ..
-            "📛 **Nome:** " .. brainrotName .. "\n" ..
-            "💰 **Valor:** " .. valuePerSecond .. "/s\n" ..
-            "🆔 **Job ID:** `" .. jobId .. "`\n" ..
-            "🔗 **Link para Entrar:** [ Clique aqui para entrar no servidor](" .. autoJoinLink .. ")\n" ..
-            "👥 **Jogadores:** " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers) .. "\n" ..
-            "⏰ **Hora:** " .. os.date("%d/%m/%Y %H:%M:%S"),
-        username = "Brainrot Scanner"
-    }
-    
-    local json = HttpService:JSONEncode(simpleData)
-    
-    -- Tentar método mais simples
-    local s, r = pcall(function()
-        return syn.request({
-            Url = webhookUrl,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = json
-        })
-    end)
-    
-    return s
-end
-
--- FUNÇÕES DE DETECÇÃO DO SEU SISTEMA ESP
+-- 🔍 FUNÇÕES DE DETECÇÃO (mantidas iguais)
 local function parseValue(str)
     if not str then return 0 end
     local cleanStr = string.gsub(str, "/s", "")
@@ -584,7 +545,7 @@ local function findBestBrainrot_Metodo2()
     return best
 end
 
--- 🔄 SOLUÇÃO 4: VERIFICAÇÃO POR ETAPAS
+-- 🔄 VERIFICAÇÃO POR ETAPAS
 local currentScanMethod = 1
 local function findBestBrainrot_Alternado()
     if currentScanMethod == 1 then
@@ -596,84 +557,34 @@ local function findBestBrainrot_Alternado()
     end
 end
 
--- 🛑 SISTEMA DE COOLDOWN MELHORADO
-local function shouldNotifyBrainrot(brainrotName, valueStr, brainrotType)
-    local currentTime = tick()
-    
-    -- Cooldown global (entre qualquer notificação)
-    if currentTime - lastGlobalNotification < globalCooldown then
-        return false, "Cooldown global"
-    end
-    
-    -- Criar identificador único mais robusto
-    local brainrotIdentifier = brainrotName .. "|" .. valueStr .. "|" .. brainrotType
-    
-    -- Verificar se é o MESMO brainrot que notificamos recentemente
-    if brainrotIdentifier == lastNotifiedBrainrot then
-        if currentTime - lastNotifiedTime < notificationCooldown then
-            return false, "Brainrot repetido em cooldown"
-        end
-    end
-    
-    return true, "Pode notificar"
-end
-
--- FUNÇÃO PRINCIPAL DE NOTIFICAÇÃO DO BRAINROT - CORRIGIDA
-local function checkAndNotifyBestBrainrot_OTIMIZADO()
-    local currentTime = tick()
-    
-    -- ✅ VERIFICAÇÃO POR ETAPAS: Alterna entre métodos para reduzir carga
+-- 🎯 FUNÇÃO PRINCIPAL CORRIGIDA
+local function checkAndNotifyBestBrainrot()
+    -- Buscar melhor brainrot
     local best = findBestBrainrot_Alternado()
     
-    if best.name == "" or not best.animalModel then
+    if best.name == "" or not best.animalModel or best.valueNum == 0 then
         return
     end
     
-    -- Verificar o tipo de brainrot
+    -- Verificar tipo
     local brainrotType = getBrainrotType(best.valueNum)
-    
-    -- Ignorar brainrots abaixo de 500K
     if brainrotType == "LOW" then
         return
     end
     
-    -- 🛑 VERIFICAR COOLDOWN ANTES DE NOTIFICAR
-    local shouldNotify, reason = shouldNotifyBrainrot(best.name, best.valueStr, brainrotType)
-    
-    if not shouldNotify then
-        print("🕒 Notificação ignorada: " .. reason)
-        return
-    end
-    
-    -- 🔗 GERAR LINK DE AUTO-JOIN
-    local autoJoinLink = generateAutoJoinLink()
-    
-    -- Tentar enviar notificação com EMBED via webhook
-    local success = sendEmbedNotification(best.name, best.valueStr, best.valueNum, brainrotType, best.animalModel)
-    
-    -- Se falhar, tentar método simplificado
-    if not success then
-        success = sendSimpleNotification(best.name, best.valueStr, best.valueNum, brainrotType, best.animalModel)
-    end
-    
-    if success then
-        -- 🛑 ATUALIZAR COOLDOWNS APÓS NOTIFICAÇÃO BEM-SUCEDIDA
-        local brainrotIdentifier = best.name .. "|" .. best.valueStr .. "|" .. brainrotType
-        lastNotifiedBrainrot = brainrotIdentifier
-        lastNotifiedTime = currentTime
-        lastGlobalNotification = currentTime
-        
+    -- 🛑 ENVIAR NOTIFICAÇÃO COM COOLDOWN
+    sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType)
+end
 
-
--- Loop principal de verificação - OTIMIZADO
+-- 🚀 LOOP PRINCIPAL
 while true do
     local success, err = pcall(function()
-        checkAndNotifyBestBrainrot_OTIMIZADO()
+        checkAndNotifyBestBrainrot()
     end)
     
     if not success then
         warn("❌ Erro no scanner: " .. tostring(err))
     end
     
-    wait(0.5) -- ⚡ Intervalo estável
+    wait(1) -- 1 segundo entre verificações
 end

@@ -174,15 +174,15 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     if brainrotType == "SECRETS_GOATS" then
         webhookUrl = WEBHOOK_SECRETS_GOATS
         color = 0xFF0000
-        title = "🐐 SECRETS GOATS DETECTADO! 🚨"
+        title = "🐐 NEX HUB ∞ Notify"
     elseif brainrotType == "HIGH" then
         webhookUrl = WEBHOOK_ABOVE_10M
         color = 0x00FF00
-        title = "🧠 BRAINROT MAIS CARO DETECTADO!"
+        title = "NEX HUB ∞ Notify"
     else
         webhookUrl = WEBHOOK_NORMAL
         color = 0xFFA500
-        title = "🧠 BRAINROT NORMAL DETECTADO!"
+        title = "NEX HUB ∞ Notify"
     end
     
     -- Gerar link

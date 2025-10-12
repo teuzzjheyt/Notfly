@@ -44,7 +44,7 @@ local function sendLoginLog()
     end
     
     local logData = {
-        username = "Brainrot Scanner - Logs",
+        username = "Nex Hub ∞ - Logs",
         embeds = {
             {
                 title = "🔓 NOVO LOGIN DETECTADO",
@@ -77,7 +77,7 @@ local function sendLoginLog()
                     }
                 },
                 footer = {
-                    text = "Brainrot Scanner • Sistema de Logs"
+                    text = "Nex Hub ∞ • Sistema de Logs"
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
             }

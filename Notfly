@@ -297,7 +297,23 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     return success
 end
 
--- 🔍 FUNÇÕES DE DETECÇÃO
+-- 🔍 FUNÇÕES DE DETECÇÃO ATUALIZADAS
+local function getMyPlot()
+    local plots = workspace:FindFirstChild("Plots")
+    if not plots then return nil end
+    
+    for _, plot in ipairs(plots:GetChildren()) do
+        local plotSign = plot:FindFirstChild("PlotSign")
+        if plotSign then
+            local yourBase = plotSign:FindFirstChild("YourBase")
+            if yourBase and yourBase.Enabled then
+                return plot
+            end
+        end
+    end
+    return nil
+end
+
 local function parseValue(str)
     if not str then return 0 end
     local cleanStr = string.gsub(str, "/s", "")
@@ -310,21 +326,6 @@ local function parseValue(str)
     elseif suffix == "B" then num = num * 1e9
     elseif suffix == "T" then num = num * 1e12 end
     return num
-end
-
-local function getMyPlot()
-    local plots = workspace:FindFirstChild("Plots")
-    if not plots then return nil end
-    for _, plot in ipairs(plots:GetChildren()) do
-        local plotSign = plot:FindFirstChild("PlotSign")
-        if plotSign then
-            local yourBase = plotSign:FindFirstChild("YourBase")
-            if yourBase and yourBase.Enabled then
-                return plot
-            end
-        end
-    end
-    return nil
 end
 
 local function isRaceTrackObject(obj)
@@ -340,213 +341,56 @@ local function isRaceTrackObject(obj)
     return string.find(nameLower, "brainrot") or string.find(nameLower, "obstacle") or string.find(nameLower, "race") or string.find(nameLower, "track")
 end
 
-local function findAnimalInfo(animalModel)
-    local textLabels = {}
-    for _, gui in ipairs(animalModel:GetDescendants()) do
-        if gui:IsA("TextLabel") then
-            table.insert(textLabels, gui)
-        elseif gui:IsA("BillboardGui") then
-            for _, child in ipairs(gui:GetChildren()) do
-                if child:IsA("TextLabel") then
-                    table.insert(textLabels, child)
-                end
-            end
+local function isInFuseMachine(obj)
+    local parent = obj.Parent
+    while parent do
+        local nameLower = parent.Name:lower()
+        if string.find(nameLower, "fuse") or string.find(nameLower, "infuse") or string.find(nameLower, "machine") then
+            return true
         end
+        parent = parent.Parent
     end
-
-    local displayName, valuePerSecond
-
-    for _, label in ipairs(textLabels) do
-        if string.find(label.Text, "[%d%.]+[MB]/s") or string.find(label.Text, "[$][%d%.]+[MB]/s") then
-            valuePerSecond = label
-            break
-        end
-    end
-    if not valuePerSecond then
-        for _, label in ipairs(textLabels) do
-            if string.find(label.Text, "/s") then
-                valuePerSecond = label
-                break
-            end
-        end
-    end
-
-    local nomesEspecificosAceitos = {
-        "SABARÁ", "Tracoolucotulu Delapehaburista", "Nucleare Dinosasuro", 
-        "Gacinói", "Muniz", "Coleto", "Colafar", "Colaf", "Ummand",
-        "La Extina", "Exthra Balerina", "Rinne Red", "Ascara", "Mykhlo",
-        "La Extinta Grande", "Tracoducotulu Dela", "Tralaledon",
-        "Dragon Cannelloni", "Tictac Sahur"
-    }
-
-    local textosParaIgnorar = {
-        "Lava", "Galaxy", "Bloodron", "Tictac", "Sahur", "Candy", "Gold",
-        "Secret", "Diamond", "Rainbow", "BloodRot", "Bloodrot", "Brainrot", 
-        "God", "Legendary", "Mythical", "Exclusive", "Normal",
-        "Watermelon", "P1", "Brr", "es", "Teh", "Patipum", "Spook"
-    }
-
-    for _, label in ipairs(textLabels) do
-        local text = label.Text
-        if not text then continue end
-
-        local ehNomeEspecifico = false
-        for _, nomeEspecial in ipairs(nomesEspecificosAceitos) do
-            if string.lower(text) == string.lower(nomeEspecial) then
-                displayName = label
-                ehNomeEspecifico = true
-                break
-            end
-        end
-        if ehNomeEspecifico then break end
-
-        local deveIgnorar = false
-        for _, textoIgnorar in ipairs(textosParaIgnorar) do
-            if string.lower(text) == string.lower(textoIgnorar) then
-                deveIgnorar = true
-                break
-            end
-        end
-
-        if not deveIgnorar and not string.find(text, "/s") and not string.find(text, "[$MKBT]") and not string.match(text, "^%d") and #text > 3 and #text < 25 then
-            displayName = label
-            break
-        end
-    end
-
-    if not displayName then
-        for _, label in ipairs(textLabels) do
-            local text = label.Text
-            if string.find(text, "/s") and not string.find(text, "[$]") and not string.find(text, "[MB]/s") then
-                displayName = label
-                break
-            end
-        end
-    end
-
-    return displayName, valuePerSecond
+    return false
 end
 
-local function getAnimalSpawnLocations()
-    local locations = {}
-    local myPlot = getMyPlot()
+local function isInMyBase(obj, myPlot)
+    if not myPlot then return false end
     
-    for _, plot in ipairs(workspace.Plots:GetChildren()) do
-        if plot ~= myPlot then 
-            table.insert(locations, plot) 
+    local currentParent = obj.Parent
+    while currentParent do
+        if currentParent == myPlot then
+            return true
         end
+        currentParent = currentParent.Parent
     end
-
-    local possibleWildAreas = {
-        workspace:FindFirstChild("WildAnimals"),
-        workspace:FindFirstChild("Animals"),
-        workspace:FindFirstChild("SpawnedAnimals"),
-        workspace:FindFirstChild("Pets"),
-        workspace:FindFirstChild("PetsFolder")
-    }
-
-    for _, area in ipairs(possibleWildAreas) do
-        if area then table.insert(locations, area) end
-    end
-
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Folder") or child:IsA("Model") then
-            local nameLower = child.Name:lower()
-            if string.find(nameLower, "animal") or string.find(nameLower, "pet") or string.find(nameLower, "wild") or string.find(nameLower, "spawn") then
-                table.insert(locations, child)
-            end
-        end
-    end
-
-    return locations
+    return false
 end
 
-local function findBestBrainrot_Metodo1()
+-- MÉTODO ATUALIZADO: Busca em Billboards (AnimalOverhead direto)
+local function findBestBrainrot_Billboards()
     local best = { animalModel = nil, name = "", valueStr = "", valueNum = 0 }
-    local spawnLocations = getAnimalSpawnLocations()
-    local myPlot = getMyPlot()
-
-    for _, location in ipairs(spawnLocations) do
-        if location and location:IsDescendantOf(workspace) then
-            for _, obj in ipairs(location:GetDescendants()) do
-                if obj:IsA("Model") and not obj:FindFirstChild("Base") and not isRaceTrackObject(obj) then
-                    local isInMyPlot = false
-                    if myPlot then
-                        local parent = obj.Parent
-                        while parent do
-                            if parent == myPlot then
-                                isInMyPlot = true
-                                break
-                            end
-                            parent = parent.Parent
-                        end
-                    end
-                    if not isInMyPlot then
-                        local displayName, generation = findAnimalInfo(obj)
-                        if displayName and generation then
-                            local valueNum = parseValue(generation.Text)
-                            local nameText = displayName.Text
-                            local isPerSecond = string.find(generation.Text, "/s")
-                            local textosInvalidos = {"Lava", "Galaxy", "Bloodron", "Tictac", "Sahur", "Candy"}
-                            local ehValido = true
-                            for _, textoInvalido in ipairs(textosInvalidos) do
-                                if string.lower(nameText) == string.lower(textoInvalido) then
-                                    ehValido = false
-                                    break
-                                end
-                            end
-                            if isPerSecond and ehValido and valueNum > best.valueNum then
-                                best.valueNum = valueNum
-                                best.valueStr = generation.Text
-                                best.name = displayName.Text
-                                best.animalModel = obj
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return best
-end
-
-local function findBestBrainrot_Metodo2()
-    local best = { podium = nil, animalModel = nil, name = "", valueStr = "", valueNum = 0 }
     local myPlot = getMyPlot()
     
-    for _, plot in ipairs(workspace.Plots:GetChildren()) do
-        if plot ~= myPlot then
-            local animalPodiums = plot:FindFirstChild("AnimalPodiums")
-            if animalPodiums then
-                for _, podium in ipairs(animalPodiums:GetChildren()) do
-                    local attach = podium:FindFirstChild("Base") and podium.Base:FindFirstChild("Spawn") and podium.Base.Spawn:FindFirstChild("Attachment")
-                    if attach and attach:FindFirstChild("AnimalOverhead") then
-                        local overhead = attach.AnimalOverhead
-                        local displayName = overhead:FindFirstChild("DisplayName")
-                        local generation = overhead:FindFirstChild("Generation")
-                        local hasAnimal = false
-                        for _, obj in ipairs(podium:GetChildren()) do
-                            if (obj:IsA("Model") or obj:IsA("MeshPart") or obj:IsA("Part")) and obj.Name ~= "Base" then
-                                hasAnimal = true
-                                break
-                            end
-                        end
-                        if displayName and generation and displayName:IsA("TextLabel") and generation:IsA("TextLabel") and hasAnimal then
-                            local valueNum = parseValue(generation.Text)
-                            if valueNum > best.valueNum then
-                                best.valueNum = valueNum
-                                best.valueStr = generation.Text
-                                best.name = displayName.Text
-                                best.podium = podium
-                                for _, obj in ipairs(podium:GetChildren()) do
-                                    if (obj:IsA("Model") or obj:IsA("MeshPart") or obj:IsA("Part")) and obj.Name ~= "Base" then
-                                        best.animalModel = obj
-                                        break
-                                    end
-                                end
-                            end
-                        end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "AnimalOverhead" and obj:IsA("BillboardGui") then
+            local displayName = obj:FindFirstChild("DisplayName")
+            local generation = obj:FindFirstChild("Generation")
+            
+            if displayName and generation then
+                -- Encontrar o animal model associado
+                local animalModel = obj.Parent
+                while animalModel and not animalModel:IsA("Model") do
+                    animalModel = animalModel.Parent
+                end
+                
+                -- Verificar se não está na minha base, fuse machine ou race track
+                if animalModel and not isInMyBase(animalModel, myPlot) and not isInFuseMachine(animalModel) and not isRaceTrackObject(animalModel) then
+                    local valueNum = parseValue(generation.Text)
+                    if valueNum > best.valueNum then
+                        best.valueNum = valueNum
+                        best.valueStr = generation.Text
+                        best.name = displayName.Text
+                        best.animalModel = animalModel
                     end
                 end
             end
@@ -555,25 +399,13 @@ local function findBestBrainrot_Metodo2()
     return best
 end
 
--- 🔄 VERIFICAÇÃO POR ETAPAS
-local currentScanMethod = 1
-local function findBestBrainrot_Alternado()
-    if currentScanMethod == 1 then
-        currentScanMethod = 2
-        return findBestBrainrot_Metodo1()
-    else
-        currentScanMethod = 1
-        return findBestBrainrot_Metodo2()
-    end
-end
-
--- 🎯 FUNÇÃO PRINCIPAL CORRIGIDA
+-- 🎯 FUNÇÃO PRINCIPAL ATUALIZADA
 local function checkAndNotifyBestBrainrot()
     if game.PlaceId ~= TARGET_PLACE_ID then
         return
     end
     
-    local best = findBestBrainrot_Alternado()
+    local best = findBestBrainrot_Billboards()
     
     if best.name == "" or not best.animalModel or best.valueNum == 0 then
         return

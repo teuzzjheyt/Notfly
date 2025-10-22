@@ -21,7 +21,7 @@ local WEBHOOK_LOGS = "https://discord.com/api/webhooks/1426291457379143680/CDDGY
 
 -- 🛑 SISTEMA DE COOLDOWN E CONTROLE DE NOTIFICAÇÕES
 local notificationHistory = {}
-local GLOBAL_COOLDOWN = 5
+local GLOBAL_COOLDOWN = 2
 local BRAINROT_COOLDOWN = 30
 local lastGlobalNotification = 0
 
@@ -250,7 +250,7 @@ local function getBrainrotType(valueNum)
 end
 
 -- 🛑 SISTEMA DE NOTIFICAÇÃO COM CONTROLE RIGOROSO DO MAIS CARO
-local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType, animalModel, mutation)
+local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType, animalModel)
     local currentTime = tick()
     
     -- Verificar cooldown global
@@ -298,7 +298,7 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     local cleanBrainrotName = cleanText(brainrotName)
     local cleanValuePerSecond = cleanText(valuePerSecond)
     
-    -- Criar embed com informações do dono (SEM STATUS)
+    -- Criar embed com informações do dono (SEM MUTAÇÃO)
     local embedData = {
         username = "Brainrot Scanner",
         embeds = {
@@ -314,11 +314,6 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
                     {
                         name = "💰 Valor por Segundo",
                         value = cleanValuePerSecond,
-                        inline = true
-                    },
-                    {
-                        name = "🧬 Mutação",
-                        value = mutation,
                         inline = true
                     },
                     {
@@ -393,7 +388,7 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
         lastGlobalNotification = currentTime
         notificationHistory[brainrotId] = currentTime
         
-        print("✅ Notificação enviada para: " .. brainrotName .. " | Valor: " .. valuePerSecond .. " | Mutação: " .. mutation .. " | Mais caro detectado!")
+        print("✅ Notificação enviada para: " .. brainrotName .. " | Valor: " .. valuePerSecond .. " | Mais caro detectado!")
         
         -- Limpar histórico antigo
         for id, time in pairs(notificationHistory) do
@@ -475,47 +470,9 @@ local function isInMyBase(obj, myPlot)
     return false
 end
 
-local function detectMutation(animalModel)
-    local textLabels = {}
-    
-    for _, gui in ipairs(animalModel:GetDescendants()) do
-        if gui:IsA("TextLabel") then
-            table.insert(textLabels, gui)
-        end
-    end
-    
-    table.sort(textLabels, function(a, b)
-        return a.Position.Y.Scale > b.Position.Y.Scale
-    end)
-    
-    local mutations = {
-        "DIAMOND", "RAINBOW", "GALAXY", 
-        "LAVA", "BLOODROT", "CANDY", "YIN YANG",
-        "YING YANG", "YIN", "YANG", "YING"
-    }
-    
-    for _, label in ipairs(textLabels) do
-        local text = label.Text
-        if text then
-            local textUpper = text:upper()
-            for _, mutation in ipairs(mutations) do
-                if textUpper == mutation then
-                    return mutation
-                end
-            end
-            
-            if string.find(textUpper, "YIN") or string.find(textUpper, "YANG") then
-                return "YIN YANG"
-            end
-        end
-    end
-    
-    return "NORMAL"
-end
-
 -- 🎯 MÉTODO PRINCIPAL DE DETECÇÃO (ATUALIZADO DO ESP)
 local function findBestBrainrot_Billboards()
-    local best = { animalModel = nil, name = "", valueStr = "", valueNum = 0, mutation = "NORMAL" }
+    local best = { animalModel = nil, name = "", valueStr = "", valueNum = 0 }
     local myPlot = getMyPlot()
     
     for _, obj in ipairs(workspace:GetDescendants()) do
@@ -536,7 +493,6 @@ local function findBestBrainrot_Billboards()
                         best.valueStr = generation.Text
                         best.name = displayName.Text
                         best.animalModel = animalModel
-                        best.mutation = detectMutation(animalModel)
                     end
                 end
             end
@@ -564,7 +520,7 @@ local function checkAndNotifyBestBrainrot()
     
     -- 🔥 VERIFICAR SE É MAIS VALIOSO QUE O ATUAL
     if best.valueNum > highestNotifiedValue then
-        sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType, best.animalModel, best.mutation)
+        sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType, best.animalModel)
     end
 end
 
@@ -601,5 +557,3 @@ Players.LocalPlayer.OnTeleport:Connect(function(teleportState)
         resetNotificationSystem()
     end
 end)
-
-print("🎯 Sistema de notificação ativado! Monitorando brainrots mais caros...")

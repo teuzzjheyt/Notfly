@@ -1,8 +1,9 @@
--- Sistema de Notificação do Brainrot Mais Caro com EMBED - CORRIGIDO
+-- Sistema de Notificação do Brainrot Mais Caro com EMBED + DETECÇÃO DO DONO
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local workspace = game:GetService("Workspace")
 local TeleportService = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
 
 -- 🎯 PLACE ID ESPECÍFICO
 local TARGET_PLACE_ID = 109983668079237
@@ -18,11 +19,15 @@ local WEBHOOK_ABOVE_10M = "https://discord.com/api/webhooks/1422728583113080922/
 local WEBHOOK_NORMAL = "https://discord.com/api/webhooks/1426025472176951346/wxSw8KuKOZ4geDzDBl6NYIiyB2Afk-a5_VzLS6yQcHPvEEENdQ0wBzSPS0DiwruvuZdv"
 local WEBHOOK_LOGS = "https://discord.com/api/webhooks/1426291457379143680/CDDGYgVERserAOEhiuQLoTeeqnSaaZnCWhIp78gytPU-JzwWQ_LTrGbZnxkOFrgzLtkd"
 
--- 🛑 SISTEMA DE COOLDOWN FORTIFICADO
+-- 🛑 SISTEMA DE COOLDOWN E CONTROLE DE NOTIFICAÇÕES
 local notificationHistory = {}
 local GLOBAL_COOLDOWN = 5
 local BRAINROT_COOLDOWN = 30
 local lastGlobalNotification = 0
+
+-- 🔥 VARIÁVEL PARA RASTREAR O MAIOR VALOR JÁ NOTIFICADO
+local highestNotifiedValue = 0
+local highestNotifiedBrainrotId = ""
 
 -- Valores mínimos
 local MINIMUM_VALUE_SECRETS_GOATS = 400000000
@@ -156,6 +161,81 @@ local function cleanText(text)
     return cleaned
 end
 
+-- 🏠 SISTEMA DE DETECÇÃO DO DONO DA BASE (INTEGRADO)
+local function getPlotOwner(plot)
+    local plotSign = plot:FindFirstChild("PlotSign")
+    if not plotSign then 
+        return "Sem Dono"
+    end
+    
+    for _, child in pairs(plotSign:GetDescendants()) do
+        if child:IsA("TextLabel") or child:IsA("TextButton") then
+            local text = child.Text or ""
+            if text ~= "" then
+                -- Verificar padrão "Nome's Base"
+                if text:find("'s Base") then
+                    local ownerName = text:match("^(.+)'s Base$")
+                    if ownerName then
+                        return ownerName
+                    end
+                end
+                
+                -- Verificar padrão "Base de Nome"
+                if text:find("Base de") then
+                    local ownerName = text:match("Base de%s+(.+)")
+                    if ownerName then
+                        ownerName = ownerName:gsub("%*", ""):gsub("\n", " "):match("([%w_]+)")
+                        if ownerName then
+                            return ownerName
+                        end
+                    end
+                end
+                
+                -- Verificar se é o nome de algum jogador
+                for _, player in ipairs(Players:GetPlayers()) do
+                    if text == player.Name then
+                        return player.Name
+                    end
+                end
+                
+                -- Se não for "YOUR BASE" ou outros textos padrão, retornar o texto
+                if text ~= "YOUR BASE" and text ~= "Sem Dono" and text ~= "Semi Dono" and not text:find("INHEIRO") then
+                    return text
+                end
+            end
+        end
+    end
+    
+    return "Sem Dono"
+end
+
+local function findPlotOwnerByAnimal(animalModel)
+    if not animalModel then return "Desconhecido" end
+    
+    -- Procurar em qual plot o animal está
+    local currentParent = animalModel.Parent
+    while currentParent do
+        if currentParent.Name == "Plots" then
+            break
+        end
+        
+        -- Se encontrou um plot, verificar o dono
+        local plots = workspace:FindFirstChild("Plots")
+        if plots then
+            for _, plot in ipairs(plots:GetChildren()) do
+                if currentParent == plot or animalModel:IsDescendantOf(plot) then
+                    local owner = getPlotOwner(plot)
+                    return owner
+                end
+            end
+        end
+        
+        currentParent = currentParent.Parent
+    end
+    
+    return "Desconhecido"
+end
+
 -- Função para determinar o tipo de brainrot
 local function getBrainrotType(valueNum)
     if valueNum >= MINIMUM_VALUE_SECRETS_GOATS then
@@ -169,16 +249,24 @@ local function getBrainrotType(valueNum)
     end
 end
 
--- 🛑 SISTEMA DE NOTIFICAÇÃO COM COOLDOWN FORTE
-local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType)
+-- 🛑 SISTEMA DE NOTIFICAÇÃO COM CONTROLE RIGOROSO DO MAIS CARO
+local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType, animalModel, mutation)
     local currentTime = tick()
     
+    -- Verificar cooldown global
     if currentTime - lastGlobalNotification < GLOBAL_COOLDOWN then
         return false
     end
     
+    -- Criar ID único para este brainrot
     local brainrotId = brainrotName .. "_" .. tostring(math.floor(valueNum))
     
+    -- 🔥 VERIFICAR SE É MAIS VALIOSO QUE O JÁ NOTIFICADO
+    if valueNum <= highestNotifiedValue then
+        return false
+    end
+    
+    -- Verificar cooldown específico para este brainrot
     if notificationHistory[brainrotId] then
         local timeSinceLastNotification = currentTime - notificationHistory[brainrotId]
         if timeSinceLastNotification < BRAINROT_COOLDOWN then
@@ -186,15 +274,18 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
         end
     end
     
+    -- 🔍 DETECTAR O DONO DA BASE
+    local plotOwner = findPlotOwnerByAnimal(animalModel)
+    
     local webhookUrl, color, title
     if brainrotType == "SECRETS_GOATS" then
         webhookUrl = WEBHOOK_SECRETS_GOATS
         color = 0xFF0000
-        title = "🐐 NEX HUB ∞ Notify"
+        title = "🐐 NEX HUB ∞ Notify - SECRETS GOATS"
     elseif brainrotType == "HIGH" then
         webhookUrl = WEBHOOK_ABOVE_10M
         color = 0x00FF00
-        title = "NEX HUB ∞ Notify"
+        title = "NEX HUB ∞ Notify - HIGH VALUE"
     else
         webhookUrl = WEBHOOK_NORMAL
         color = 0xFFA500
@@ -207,6 +298,7 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     local cleanBrainrotName = cleanText(brainrotName)
     local cleanValuePerSecond = cleanText(valuePerSecond)
     
+    -- Criar embed com informações do dono (SEM STATUS)
     local embedData = {
         username = "Brainrot Scanner",
         embeds = {
@@ -222,6 +314,16 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
                     {
                         name = "💰 Valor por Segundo",
                         value = cleanValuePerSecond,
+                        inline = true
+                    },
+                    {
+                        name = "🧬 Mutação",
+                        value = mutation,
+                        inline = true
+                    },
+                    {
+                        name = "👑 Dono da Base",
+                        value = plotOwner,
                         inline = true
                     },
                     {
@@ -284,9 +386,16 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     end
     
     if success then
+        -- 🔥 ATUALIZAR O MAIOR VALOR NOTIFICADO
+        highestNotifiedValue = valueNum
+        highestNotifiedBrainrotId = brainrotId
+        
         lastGlobalNotification = currentTime
         notificationHistory[brainrotId] = currentTime
         
+        print("✅ Notificação enviada para: " .. brainrotName .. " | Valor: " .. valuePerSecond .. " | Mutação: " .. mutation .. " | Mais caro detectado!")
+        
+        -- Limpar histórico antigo
         for id, time in pairs(notificationHistory) do
             if currentTime - time > 600 then
                 notificationHistory[id] = nil
@@ -297,7 +406,7 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     return success
 end
 
--- 🔍 FUNÇÕES DE DETECÇÃO ATUALIZADAS
+-- 🔍 MÉTODO DE DETECÇÃO ATUALIZADO (DO ESP)
 local function getMyPlot()
     local plots = workspace:FindFirstChild("Plots")
     if not plots then return nil end
@@ -366,9 +475,47 @@ local function isInMyBase(obj, myPlot)
     return false
 end
 
--- MÉTODO ATUALIZADO: Busca em Billboards (AnimalOverhead direto)
+local function detectMutation(animalModel)
+    local textLabels = {}
+    
+    for _, gui in ipairs(animalModel:GetDescendants()) do
+        if gui:IsA("TextLabel") then
+            table.insert(textLabels, gui)
+        end
+    end
+    
+    table.sort(textLabels, function(a, b)
+        return a.Position.Y.Scale > b.Position.Y.Scale
+    end)
+    
+    local mutations = {
+        "DIAMOND", "RAINBOW", "GALAXY", 
+        "LAVA", "BLOODROT", "CANDY", "YIN YANG",
+        "YING YANG", "YIN", "YANG", "YING"
+    }
+    
+    for _, label in ipairs(textLabels) do
+        local text = label.Text
+        if text then
+            local textUpper = text:upper()
+            for _, mutation in ipairs(mutations) do
+                if textUpper == mutation then
+                    return mutation
+                end
+            end
+            
+            if string.find(textUpper, "YIN") or string.find(textUpper, "YANG") then
+                return "YIN YANG"
+            end
+        end
+    end
+    
+    return "NORMAL"
+end
+
+-- 🎯 MÉTODO PRINCIPAL DE DETECÇÃO (ATUALIZADO DO ESP)
 local function findBestBrainrot_Billboards()
-    local best = { animalModel = nil, name = "", valueStr = "", valueNum = 0 }
+    local best = { animalModel = nil, name = "", valueStr = "", valueNum = 0, mutation = "NORMAL" }
     local myPlot = getMyPlot()
     
     for _, obj in ipairs(workspace:GetDescendants()) do
@@ -377,13 +524,11 @@ local function findBestBrainrot_Billboards()
             local generation = obj:FindFirstChild("Generation")
             
             if displayName and generation then
-                -- Encontrar o animal model associado
                 local animalModel = obj.Parent
                 while animalModel and not animalModel:IsA("Model") do
                     animalModel = animalModel.Parent
                 end
                 
-                -- Verificar se não está na minha base, fuse machine ou race track
                 if animalModel and not isInMyBase(animalModel, myPlot) and not isInFuseMachine(animalModel) and not isRaceTrackObject(animalModel) then
                     local valueNum = parseValue(generation.Text)
                     if valueNum > best.valueNum then
@@ -391,6 +536,7 @@ local function findBestBrainrot_Billboards()
                         best.valueStr = generation.Text
                         best.name = displayName.Text
                         best.animalModel = animalModel
+                        best.mutation = detectMutation(animalModel)
                     end
                 end
             end
@@ -399,7 +545,7 @@ local function findBestBrainrot_Billboards()
     return best
 end
 
--- 🎯 FUNÇÃO PRINCIPAL ATUALIZADA
+-- 🎯 FUNÇÃO PRINCIPAL ATUALIZADA COM CONTROLE DO MAIS CARO
 local function checkAndNotifyBestBrainrot()
     if game.PlaceId ~= TARGET_PLACE_ID then
         return
@@ -416,18 +562,44 @@ local function checkAndNotifyBestBrainrot()
         return
     end
     
-    sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType)
+    -- 🔥 VERIFICAR SE É MAIS VALIOSO QUE O ATUAL
+    if best.valueNum > highestNotifiedValue then
+        sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType, best.animalModel, best.mutation)
+    end
+end
+
+-- 🔄 FUNÇÃO PARA RESETAR O CONTROLE (opcional, em caso de mudança de servidor)
+local function resetNotificationSystem()
+    highestNotifiedValue = 0
+    highestNotifiedBrainrotId = ""
+    notificationHistory = {}
+    print("🔄 Sistema de notificação resetado!")
 end
 
 -- 🚀 LOOP PRINCIPAL
-while true do
-    if game.PlaceId ~= TARGET_PLACE_ID then
-        break
+spawn(function()
+    while true do
+        if game.PlaceId ~= TARGET_PLACE_ID then
+            break
+        end
+        
+        local success, err = pcall(function()
+            checkAndNotifyBestBrainrot()
+        end)
+        
+        if not success then
+            warn("❌ Erro no scanner: " .. tostring(err))
+        end
+        
+        wait(1)
     end
-    
-    local success, err = pcall(function()
-        checkAndNotifyBestBrainrot()
-    end)
-    
-    wait(1)
-end
+end)
+
+-- Opcional: Resetar sistema quando o jogador mudar de servidor
+Players.LocalPlayer.OnTeleport:Connect(function(teleportState)
+    if teleportState == Enum.TeleportState.Started then
+        resetNotificationSystem()
+    end
+end)
+
+print("🎯 Sistema de notificação ativado! Monitorando brainrots mais caros...")

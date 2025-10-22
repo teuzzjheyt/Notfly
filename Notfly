@@ -557,3 +557,5 @@ Players.LocalPlayer.OnTeleport:Connect(function(teleportState)
         resetNotificationSystem()
     end
 end)
+
+print("🎯 Sistema de notificação ativado! Monitorando brainrots mais caros...")

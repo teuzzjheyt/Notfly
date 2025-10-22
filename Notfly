@@ -21,13 +21,14 @@ local WEBHOOK_LOGS = "https://discord.com/api/webhooks/1426291457379143680/CDDGY
 
 -- 🛑 SISTEMA DE COOLDOWN E CONTROLE DE NOTIFICAÇÕES
 local notificationHistory = {}
-local GLOBAL_COOLDOWN = 2
+local GLOBAL_COOLDOWN = 5
 local BRAINROT_COOLDOWN = 30
 local lastGlobalNotification = 0
 
--- 🔥 VARIÁVEL PARA RASTREAR O MAIOR VALOR JÁ NOTIFICADO
+-- 🔥 VARIÁVEIS PARA RASTREAR O MAIOR VALOR ATUAL
 local highestNotifiedValue = 0
 local highestNotifiedBrainrotId = ""
+local currentHighestBrainrot = nil
 
 -- Valores mínimos
 local MINIMUM_VALUE_SECRETS_GOATS = 400000000
@@ -249,7 +250,25 @@ local function getBrainrotType(valueNum)
     end
 end
 
--- 🛑 SISTEMA DE NOTIFICAÇÃO COM CONTROLE RIGOROSO DO MAIS CARO
+-- 🔍 VERIFICAR SE O BRAINROT MAIS CARO AINDA EXISTE
+local function checkIfBrainrotStillExists(brainrotModel)
+    if not brainrotModel or not brainrotModel.Parent then
+        return false
+    end
+    
+    -- Verificar se o modelo ainda existe no workspace
+    local exists = false
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj == brainrotModel then
+            exists = true
+            break
+        end
+    end
+    
+    return exists
+end
+
+-- 🛑 SISTEMA DE NOTIFICAÇÃO COM CONTROLE DINÂMICO DO MAIS CARO
 local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueNum, brainrotType, animalModel)
     local currentTime = tick()
     
@@ -260,11 +279,6 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     
     -- Criar ID único para este brainrot
     local brainrotId = brainrotName .. "_" .. tostring(math.floor(valueNum))
-    
-    -- 🔥 VERIFICAR SE É MAIS VALIOSO QUE O JÁ NOTIFICADO
-    if valueNum <= highestNotifiedValue then
-        return false
-    end
     
     -- Verificar cooldown específico para este brainrot
     if notificationHistory[brainrotId] then
@@ -298,7 +312,7 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     local cleanBrainrotName = cleanText(brainrotName)
     local cleanValuePerSecond = cleanText(valuePerSecond)
     
-    -- Criar embed com informações do dono (SEM MUTAÇÃO)
+    -- Criar embed com informações do dono
     local embedData = {
         username = "Brainrot Scanner",
         embeds = {
@@ -381,9 +395,10 @@ local function sendNotificationWithCooldown(brainrotName, valuePerSecond, valueN
     end
     
     if success then
-        -- 🔥 ATUALIZAR O MAIOR VALOR NOTIFICADO
+        -- 🔥 ATUALIZAR O MAIOR VALOR ATUAL
         highestNotifiedValue = valueNum
         highestNotifiedBrainrotId = brainrotId
+        currentHighestBrainrot = animalModel
         
         lastGlobalNotification = currentTime
         notificationHistory[brainrotId] = currentTime
@@ -501,7 +516,7 @@ local function findBestBrainrot_Billboards()
     return best
 end
 
--- 🎯 FUNÇÃO PRINCIPAL ATUALIZADA COM CONTROLE DO MAIS CARO
+-- 🎯 FUNÇÃO PRINCIPAL ATUALIZADA COM CONTROLE DINÂMICO DO MAIS CARO
 local function checkAndNotifyBestBrainrot()
     if game.PlaceId ~= TARGET_PLACE_ID then
         return
@@ -518,8 +533,16 @@ local function checkAndNotifyBestBrainrot()
         return
     end
     
-    -- 🔥 VERIFICAR SE É MAIS VALIOSO QUE O ATUAL
-    if best.valueNum > highestNotifiedValue then
+    -- 🔄 VERIFICAR SE O BRAINROT MAIS CARO ATUAL AINDA EXISTE
+    if currentHighestBrainrot and not checkIfBrainrotStillExists(currentHighestBrainrot) then
+        print("🔄 Brainrot mais caro anterior saiu do servidor! Resetando sistema...")
+        highestNotifiedValue = 0
+        highestNotifiedBrainrotId = ""
+        currentHighestBrainrot = nil
+    end
+    
+    -- 🔥 VERIFICAR SE É MAIS VALIOSO QUE O ATUAL OU SE O ATUAL NÃO EXISTE MAIS
+    if best.valueNum > highestNotifiedValue or not currentHighestBrainrot then
         sendNotificationWithCooldown(best.name, best.valueStr, best.valueNum, brainrotType, best.animalModel)
     end
 end
@@ -528,6 +551,7 @@ end
 local function resetNotificationSystem()
     highestNotifiedValue = 0
     highestNotifiedBrainrotId = ""
+    currentHighestBrainrot = nil
     notificationHistory = {}
     print("🔄 Sistema de notificação resetado!")
 end
@@ -557,5 +581,3 @@ Players.LocalPlayer.OnTeleport:Connect(function(teleportState)
         resetNotificationSystem()
     end
 end)
-
-print("🎯 Sistema de notificação ativado! Monitorando brainrots mais caros...")
